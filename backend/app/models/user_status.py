@@ -1,0 +1,6 @@
+"""用户账号状态（逻辑删除等）。"""
+
+USER_STATUS_ACTIVE = "active"
+USER_STATUS_DELETED = "deleted"
+
+USER_STATUS_VALUES = frozenset({USER_STATUS_ACTIVE, USER_STATUS_DELETED})

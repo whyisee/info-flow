@@ -1,0 +1,13 @@
+/* 系统侧「权限目录 / 角色授权」共用标题区 */
+.permPageBlock h3 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.permPageBlock .permPageIntro {
+  color: #64748b;
+  margin: 0 0 20px;
+  line-height: 1.6;
+}

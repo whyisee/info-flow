@@ -1,0 +1,116 @@
+.dictMaintenance {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.dictMaintenanceToolbar {
+  margin-bottom: 10px;
+}
+
+.dictMaintenanceTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dictMaintenanceFilters {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.dictMaintenanceFilters .ant-form-item {
+  margin-bottom: 0 !important;
+}
+
+.dictMaintenanceFiltersMain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 10px;
+  width: 100%;
+}
+
+.dictMaintenanceFilters .dictMaintenanceFilterActions {
+  margin-left: auto !important;
+}
+
+.dictMaintenanceTable {
+  background: #fff;
+  border-radius: 10px;
+}
+
+.dictMaintenanceItemsCard {
+  margin-bottom: 0;
+}
+
+.dictMaintenanceHint {
+  margin: 0;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+  font-size: 13px;
+}
+
+.dictMaintenanceExtraJson {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.dictBulkTextarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.dictBulkFailList {
+  max-height: 240px;
+  overflow: auto;
+}
+
+.dictBulkExample pre {
+  margin: 8px 0 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.dictBulkTitleHelpIcon {
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+  cursor: help;
+  font-size: 14px;
+}
+
+.dictBulkHelpTooltip {
+  max-width: 440px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.dictBulkHelpTooltip p {
+  margin: 0 0 8px;
+}
+
+.dictBulkHelpTooltip p:last-of-type {
+  margin-bottom: 4px;
+}
+
+.dictBulkHelpTooltip pre {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.dictBulkModalExampleIntro {
+  margin-bottom: 10px !important;
+  font-size: 13px;
+}

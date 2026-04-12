@@ -1,0 +1,31 @@
+html,
+body,
+#root {
+  height: 100%;
+}
+
+#root {
+  min-height: 0;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--app-page-bg, #f1f5f9);
+}
+
+:root {
+  --app-page-bg: #f1f5f9;
+  --app-primary: #4f46e5;
+  --app-primary-soft: rgba(79, 70, 229, 0.08);
+}
+
+.appCenter {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+

@@ -1,0 +1,168 @@
+.declCfgVisual {
+  padding-right: 2px;
+}
+
+.declCfgVisualModuleTabs {
+  width: 100%;
+}
+
+.declCfgVisualModuleTabs .ant-tabs-nav {
+  margin-bottom: 12px;
+}
+
+.declCfgVisualModuleTabRead {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  max-width: 220px;
+}
+
+.declCfgVisualModuleTabReadText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.declCfgVisualModuleTabEditBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.45);
+  line-height: 1;
+  font-size: 12px;
+}
+
+.declCfgVisualModuleTabEditBtn:hover {
+  color: var(--ant-color-primary, #1677ff);
+}
+
+.declCfgVisualModuleTabEdit {
+  min-width: 120px;
+  max-width: 220px;
+}
+
+.declCfgVisualModuleTabInput.ant-input {
+  font-weight: 500;
+}
+
+.declCfgVisualModulePanel {
+  padding-top: 2px;
+}
+
+.declCfgVisualRow {
+  margin-bottom: 8px;
+}
+
+/* 表格式字段 / 附件 / 列表列：列标题 + 对齐行 */
+.declCfgVisualBlock {
+  margin-bottom: 4px;
+}
+
+.declCfgVisualGridHeader {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.declCfgVisualFieldGrid {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) 140px 72px 56px;
+  gap: 8px 10px;
+  align-items: start;
+}
+
+.declCfgVisualAttachGrid {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 88px minmax(96px, 0.85fr) minmax(120px, 1.1fr) 100px 52px;
+  gap: 8px 10px;
+  align-items: start;
+}
+
+.declCfgVisualColumnGrid {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) 128px minmax(96px, 0.85fr) 56px;
+  gap: 8px 10px;
+  align-items: start;
+}
+
+.declCfgVisualFieldRow .ant-form-item,
+.declCfgVisualAttachRow .ant-form-item,
+.declCfgVisualColumnRow .ant-form-item {
+  margin-bottom: 8px;
+}
+
+.declCfgVisualColAct {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 4px;
+}
+
+.declCfgVisualGridHeader .declCfgVisualColAct {
+  padding-top: 0;
+}
+
+.declCfgVisualAddBtn {
+  margin-top: 8px;
+}
+
+.declCfgVisualSelectFull {
+  width: 100%;
+  min-width: 0;
+}
+
+.declCfgVisualNumFull {
+  width: 100%;
+}
+
+.declCfgVisualAttachWrap {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.declCfgVisualAttachWrap .declCfgVisualGridHeader,
+.declCfgVisualAttachWrap .declCfgVisualAttachRow {
+  min-width: 640px;
+}
+
+.declCfgVisualSubTitle {
+  display: block;
+  margin: 12px 0 8px;
+}
+
+.declCfgVisualSubCard {
+  margin-bottom: 12px;
+  border-style: dashed;
+}
+
+.declCfgVisualSubHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.declCfgVisualWide {
+  min-width: 200px;
+}
+
+.declCfgVisualUrl {
+  min-width: 180px;
+}
+
+.declCfgVisualToolbar .ant-form-item {
+  margin-bottom: 0;
+}

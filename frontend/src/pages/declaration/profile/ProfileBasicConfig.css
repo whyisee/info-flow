@@ -1,0 +1,609 @@
+.profileBasicConfig {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.profilePageHeader {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 主内容 + 右侧锚点目录 */
+.profileBasicConfigLayout {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 20px;
+  width: 100%;
+}
+
+.profileBasicConfigMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.profileBasicForm {
+  max-width: none;
+}
+
+/* 锚点：主 Outlet 内滚动；非首段需为吸顶标题留出偏移 */
+.profileFirstSectionHeader.profileAnchor {
+  scroll-margin-top: 8px;
+}
+
+.profileSectionTitleSpaced.profileAnchor {
+  scroll-margin-top: 72px;
+}
+
+/* 右侧 TOC：无框、略偏视区中部吸顶 */
+.profileToc {
+  position: sticky;
+  top: clamp(72px, 18vh, 160px);
+  flex: 0 0 128px;
+  width: 128px;
+  max-height: min(420px, calc(100vh - 200px));
+  overflow-y: auto;
+  padding: 4px 0;
+  align-self: flex-start;
+}
+
+.profileTocList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.profileTocList li {
+  margin: 0;
+}
+
+.profileTocLink {
+  display: block;
+  width: 100%;
+  padding: 5px 4px 5px 10px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+  line-height: 1.4;
+  border-radius: 6px;
+  border-left: 2px solid transparent;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.profileTocLink:hover {
+  color: #4f46e5;
+}
+
+.profileTocLinkActive {
+  color: #4f46e5 !important;
+  font-weight: 600;
+  border-left-color: rgba(79, 70, 229, 0.65);
+  background: rgba(79, 70, 229, 0.06);
+}
+
+@media (max-width: 992px) {
+  .profileBasicConfigLayout {
+    flex-direction: column;
+  }
+
+  .profileToc {
+    position: relative;
+    top: 0;
+    flex: none;
+    width: 100%;
+    max-height: none;
+    padding: 0;
+  }
+
+  .profileTocList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+
+  .profileTocList li {
+    display: inline-block;
+  }
+
+  .profileTocLink {
+    padding: 4px 10px;
+    width: auto;
+    border-left: none;
+    background: rgba(15, 23, 42, 0.04);
+    border-radius: 999px;
+  }
+
+  .profileTocLinkActive {
+    background: rgba(79, 70, 229, 0.12) !important;
+    border-left: none;
+  }
+}
+
+.profileBasicForm .ant-form-item {
+  margin-bottom: 14px;
+}
+
+/* 双栏内短标签（如「学科方向 A」）：收窄 label 列，避免占满 160px */
+.profileBasicForm .profileFormItemLabelNarrow .ant-form-item-label {
+  flex: 0 0 104px !important;
+  max-width: 104px;
+}
+
+.profileBasicForm .profileFormItemLabelNarrow .ant-form-item-control {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* 基本信息两列栅格：列宽一致、右缘对齐；避免 flex 子项撑破 */
+.profileFormGrid {
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.profileFormGrid .profileFormCol {
+  min-width: 0;
+}
+
+.profileFormGrid .ant-form-item {
+  margin-bottom: 0;
+}
+
+/* 不占满宽度的字典控件保留 profileTaskPosSelect / profileSubjectDirSelect 固定宽 */
+.profileFormGrid
+  .ant-select:not(.profileTaskPosSelect):not(.profileSubjectDirSelect),
+.profileFormGrid .ant-picker,
+.profileFormGrid .ant-input {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* 上传 + 问号提示同一行：提示紧跟按钮右侧，文件列表仍在下方 */
+.profileUploadInlineTip {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.profileUploadInlineTip > .ant-form-item,
+.profileUploadInlineTip > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.profileUploadInlineTip .profileFieldHelp {
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+/* 上传按钮与已选文件名同一行（用于证件、特殊证明、学历/学位证明等） */
+.ant-upload-wrapper.profileUploadSameLine,
+.profileUploadSameLine .ant-upload-wrapper {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.profileUploadSameLine .ant-upload-list,
+.ant-upload-wrapper.profileUploadSameLine .ant-upload-list {
+  margin-top: 0 !important;
+}
+
+.profileUploadSameLine .ant-upload-list.ant-upload-list-text,
+.ant-upload-wrapper.profileUploadSameLine .ant-upload-list.ant-upload-list-text {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.profileUploadSameLine .ant-upload-list-item,
+.ant-upload-wrapper.profileUploadSameLine .ant-upload-list-item {
+  margin-top: 0 !important;
+  height: auto !important;
+}
+
+.profileUploadInlineTip.profileUploadSameLine {
+  align-items: center;
+}
+
+.profileUploadInlineTip.profileUploadSameLine > .ant-form-item,
+.profileUploadInlineTip.profileUploadSameLine > :first-child {
+  flex: 0 1 auto !important;
+  min-width: 0;
+}
+
+.profileUploadInlineTip.profileUploadSameLine .profileFieldHelp {
+  margin-top: 0;
+  align-self: center;
+}
+
+/* 首段：标题与操作同一行；在内容区吸顶（滚动容器为 .mainOutletWrap） */
+.profileFirstSectionHeader {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  margin-top: 0;
+  padding-top: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  /* 略向上盖住滚动穿透，避免滚动时正文从标签与标题之间漏出 */
+  box-shadow:
+    0 -1px 0 0 #fff,
+    0 8px 16px -12px rgba(15, 23, 42, 0.12);
+}
+
+.profileFirstSectionActions {
+  flex-shrink: 0;
+}
+
+.profilePageHeaderTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.profileFormStatusTag {
+  margin: 0 !important;
+}
+
+.profileSectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
+  color: #0f172a;
+}
+
+.profileSectionTitlePrimary {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.profileSectionTitleSpaced {
+  margin-top: 28px;
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.profileReadonlyInput {
+  color: rgba(15, 23, 42, 0.85) !important;
+  cursor: default;
+}
+
+.profileLabelMultiline {
+  display: inline-block;
+  max-width: 180px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.profileLabelInlineTip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+
+.profileCompositeRow {
+  width: 100%;
+  align-items: center;
+}
+
+.profileWorkUnitSelect {
+  width: 160px;
+  min-width: 140px;
+}
+
+.profileWorkUnitDeptInput {
+  min-width: 200px;
+}
+
+.profileTitleFreeInput {
+  width: 100%;
+  max-width: 360px;
+}
+
+.profileTaskPosSelect {
+  width: 200px;
+  min-width: 176px;
+}
+
+.profileSubjectDirSelect {
+  width: 120px;
+  min-width: 100px;
+}
+
+/* 任务描述：输入区占满表单项控件列剩余宽度，问号贴右侧 */
+.profileTaskDescRow.ant-space {
+  width: 100%;
+  display: flex !important;
+}
+
+.profileTaskDescRow.ant-space .ant-space-item:first-child {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 520px;
+}
+
+.profileTaskDescTextarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.profileTaskDescTextarea textarea.ant-input {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+.profileEduBlock {
+  --profile-edu-tier-w: 160px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* 最高学历 / 最高学位：第一行 Grid；第二行上传证明 */
+.profileEduLineTop {
+  display: grid;
+  grid-template-columns: var(--profile-edu-tier-w) auto 168px minmax(160px, 1fr);
+  gap: 8px 10px;
+  align-items: center;
+  width: 100%;
+  min-width: 560px;
+}
+
+.profileEduLineProof {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+.profileEduLineProof .profileUploadInlineTip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.profileEduLineTier {
+  min-width: 0;
+}
+
+.profileEduLineTier .ant-input,
+.profileEduLineTier .ant-select,
+.profileEduLineTier .ant-select .ant-select-selector,
+.profileEduLineCountry .ant-select,
+.profileEduLineCountry .ant-select .ant-select-selector,
+.profileEduLineSchool .ant-input {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+.profileEduLineCountry,
+.profileEduLineSchool {
+  min-width: 0;
+}
+
+.profileEduComma {
+  padding: 0 2px;
+  line-height: 32px;
+}
+
+.profileInlineText {
+  color: rgba(15, 23, 42, 0.65);
+  white-space: nowrap;
+}
+
+.profileFieldHelp {
+  color: #6366f1;
+  cursor: help;
+  font-size: 14px;
+}
+
+/* 任务（岗位）一/二：双下拉 + 问号同一行 */
+.profileTaskPosRow.ant-space {
+  flex-wrap: nowrap;
+  align-items: center;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.profileTaskPosRow .ant-form-item {
+  margin-bottom: 0;
+}
+
+/* 关键词：类别下拉 + 三个输入 + 问号同一行 */
+.profileKeywordRow.ant-space {
+  flex-wrap: nowrap;
+  align-items: center;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.profileKeywordRow .ant-form-item {
+  margin-bottom: 0;
+}
+
+/* 从事研究大类 / 科学研究分类：下拉加宽，与问号同一行 */
+.profileResearchSelectRow.ant-space {
+  width: 100%;
+  display: flex !important;
+  flex-wrap: nowrap;
+  align-items: center;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.profileResearchSelectRow.ant-space .ant-space-item:first-child {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.profileResearchSelectRow .ant-form-item {
+  margin-bottom: 0;
+}
+
+/* 学科方向 A/B：三列 Select + 问号同一行（避免 Space wrap 把提示换行） */
+.profileSubjectDirRow.ant-space {
+  flex-wrap: nowrap;
+  align-items: center;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.profileSubjectDirRow .ant-form-item {
+  margin-bottom: 0;
+}
+
+.profileUploadBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 2px 12px;
+  font-size: 13px;
+  color: #4f46e5;
+  background: #fff;
+  border: 1px solid rgba(79, 70, 229, 0.35);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.profileUploadBtn:hover:not(:disabled) {
+  border-color: rgba(79, 70, 229, 0.55);
+  background: rgba(79, 70, 229, 0.06);
+  color: #4338ca;
+}
+
+.profileUploadBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  color: rgba(15, 23, 42, 0.35);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+.profileUploadBtnBlock {
+  width: 100%;
+  max-width: 200px;
+}
+
+.profilePhotoField .ant-form-item-label > label {
+  height: auto;
+}
+
+.profilePhotoBox {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.profilePhotoPreviewArea {
+  width: 160px;
+  height: 200px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  border: 1px dashed rgba(15, 23, 42, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.profilePhotoPreviewAreaFilled {
+  border-style: solid;
+  border-color: rgba(15, 23, 42, 0.1);
+  padding: 4px;
+}
+
+.profilePhotoEmptyHint {
+  color: rgba(15, 23, 42, 0.35);
+  font-size: 13px;
+}
+
+.profilePhotoPreviewImg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.profilePhotoPreviewArea .ant-image {
+  width: 100%;
+  height: 100%;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.profilePhotoReq {
+  margin: 0 !important;
+  max-width: 220px;
+  font-size: 12px !important;
+}
+
+.profileFieldAlert {
+  margin-top: 8px !important;
+  max-width: 900px;
+  border-radius: 8px;
+}
+
+.profileFieldAlert .ant-alert-message {
+  color: #92400e;
+  font-size: 13px;
+}
+
+.profileThreeInputs {
+  width: 100%;
+}

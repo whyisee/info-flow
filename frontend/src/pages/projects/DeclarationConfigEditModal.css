@@ -1,0 +1,52 @@
+/* 限制弹窗高度：仅中间区域滚动，标题与底部按钮始终在视口内 */
+.projectDeclarationConfigModalWrap .ant-modal {
+  max-width: calc(100vw - 32px);
+  padding-bottom: 0;
+}
+
+.projectDeclarationConfigModalWrap .ant-modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+}
+
+.projectDeclarationConfigModalWrap .ant-modal-header {
+  flex-shrink: 0;
+}
+
+.projectDeclarationConfigModalWrap .ant-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.projectDeclarationConfigModalWrap .ant-modal-footer {
+  flex-shrink: 0;
+}
+
+.projectDeclarationConfigLabelRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* Segmented 与加载区：避免可视化首帧高度塌陷 */
+.projectDeclarationConfigPreviewHint {
+  margin-bottom: 10px;
+}
+
+.projectDeclarationConfigSegmented {
+  margin-bottom: 4px;
+}
+
+.projectDeclarationConfigVisualSpin.ant-spin-nested-loading {
+  min-height: 240px;
+}
+
+.projectDeclarationConfigVisualSpin .ant-spin-container {
+  min-height: inherit;
+}

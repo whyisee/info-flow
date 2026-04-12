@@ -1,0 +1,74 @@
+.projectDeclarationConfig {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* 与基本信息页首段标题行一致：左标题、右操作，吸顶 + 顶/底内边距 */
+.projectDeclarationPageHeader {
+  width: 100%;
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  margin-top: 0;
+  padding-top: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  box-shadow:
+    0 -1px 0 0 #fff,
+    0 8px 16px -12px rgba(15, 23, 42, 0.12);
+}
+
+.projectDeclarationPageHeaderTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.projectDeclarationPageTitle {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
+  color: #0f172a;
+}
+
+.projectDeclarationPageTitlePrimary {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.projectDeclarationPageActions {
+  flex-shrink: 0;
+}
+
+.projectDeclarationConfigModal .ant-modal-body {
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+}
+
+.projectDeclarationConfigJson {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+}
+
+.projectDeclarationConfigEditor {
+  width: 100%;
+}

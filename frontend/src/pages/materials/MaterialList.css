@@ -1,0 +1,53 @@
+.materialListPage {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.materialListToolbar {
+  margin-bottom: 10px;
+}
+
+.materialListTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.materialListFilters {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.materialListFilters .ant-form-item {
+  margin-bottom: 0 !important;
+}
+
+.materialListFiltersMain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 10px;
+  width: 100%;
+}
+
+.materialListFilters .materialListFilterActions {
+  margin-left: auto !important;
+}
+
+.materialListTable {
+  background: #fff;
+  border-radius: 10px;
+}
+
+.materialListDescCell {
+  max-width: 320px;
+}

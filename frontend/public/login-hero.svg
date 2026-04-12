@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="45%" stop-color="#312e81"/>
+      <stop offset="100%" stop-color="#4338ca"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#a5b4fc" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <ellipse cx="200" cy="120" rx="280" ry="200" fill="url(#glow)" filter="url(#blur)" opacity="0.9"/>
+  <ellipse cx="980" cy="720" rx="320" ry="240" fill="#818cf8" opacity="0.12" filter="url(#blur)"/>
+  <rect x="180" y="220" width="520" height="360" rx="16" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+  <rect x="220" y="280" width="200" height="14" rx="4" fill="rgba(255,255,255,0.35)"/>
+  <rect x="220" y="310" width="440" height="10" rx="3" fill="rgba(255,255,255,0.15)"/>
+  <rect x="220" y="335" width="380" height="10" rx="3" fill="rgba(255,255,255,0.12)"/>
+  <rect x="220" y="380" width="440" height="120" rx="10" fill="rgba(255,255,255,0.06)"/>
+  <circle cx="280" cy="440" r="28" fill="#c7d2fe"/>
+  <rect x="330" y="415" width="280" height="12" rx="3" fill="rgba(255,255,255,0.4)"/>
+  <rect x="330" y="440" width="200" height="10" rx="3" fill="rgba(255,255,255,0.2)"/>
+  <rect x="580" y="520" width="240" height="48" rx="10" fill="#a5b4fc" opacity="0.9"/>
+  <path d="M720 260 L920 260 C940 260 955 275 955 295 L955 520 C955 540 940 555 920 555 L720 555 C700 555 685 540 685 520 L685 295 C685 275 700 260 720 260 Z" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.15)"/>
+  <circle cx="820" cy="360" r="48" fill="#e0e7ff" opacity="0.85"/>
+  <path d="M805 368 L815 378 L838 348" stroke="#4338ca" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="600" y="820" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-family="system-ui, sans-serif" font-size="22" font-weight="500">Info Flow</text>
+</svg>

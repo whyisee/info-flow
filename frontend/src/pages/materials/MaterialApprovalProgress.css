@@ -1,0 +1,74 @@
+.materialApprovalProgress {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 8px;
+  background: var(--ant-color-fill-alter, #fafafa);
+}
+
+.materialApprovalProgressTitle {
+  margin-bottom: 8px !important;
+}
+
+.materialApprovalProgressMeta {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.materialApprovalProgressPlanTitle {
+  margin-bottom: 8px !important;
+  font-size: 14px !important;
+}
+
+.materialApprovalProgressPlan {
+  margin-bottom: 16px;
+}
+
+.materialApprovalProgressHint {
+  margin-bottom: 16px !important;
+  font-size: 13px;
+}
+
+.materialApprovalProgressCosign {
+  margin-left: 6px;
+  font-size: 12px;
+}
+
+.materialApprovalProgressAlert {
+  margin-bottom: 16px;
+}
+
+.materialApprovalProgressSteps {
+  margin-bottom: 24px;
+}
+
+.materialApprovalProgressTimeline {
+  margin-top: 8px;
+}
+
+.materialApprovalProgressRecordHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.materialApprovalProgressActor {
+  font-weight: 500;
+}
+
+.materialApprovalProgressAction {
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+  font-size: 13px;
+}
+
+.materialApprovalProgressTime {
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+  margin-top: 4px;
+}
+
+.materialApprovalProgressComment {
+  margin-top: 6px;
+  white-space: pre-wrap;
+}

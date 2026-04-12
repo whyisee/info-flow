@@ -1,0 +1,111 @@
+.userListPage {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.userListToolbar {
+  margin-bottom: 10px;
+}
+
+.userListTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.userListFilters {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.userListFilters .ant-form-item {
+  margin-bottom: 0 !important;
+}
+
+.userListFiltersMain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 10px;
+  width: 100%;
+}
+
+.userListFilters .userListFilterActions {
+  margin-left: auto !important;
+}
+
+.userListFilterMoreBtn.ant-btn-text {
+  min-width: 32px;
+  height: 32px;
+  padding: 4px 8px;
+  color: #64748b;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.userListFilterMoreBtn.ant-btn-text:hover,
+.userListFilterMoreBtn.ant-btn-text:focus {
+  color: #4f46e5 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.userListFiltersExtra {
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 10px;
+  width: 100%;
+  padding-top: 12px;
+  margin-top: 10px;
+  border-top: 1px dashed rgba(15, 23, 42, 0.1);
+  box-sizing: border-box;
+}
+
+.userListTable {
+  background: #fff;
+  border-radius: 10px;
+}
+
+.userListForm {
+  margin-top: 8px;
+}
+
+.userBulkHint {
+  margin-bottom: 8px !important;
+  font-size: 13px;
+}
+
+.userBulkExample {
+  margin-bottom: 12px !important;
+}
+
+.userBulkExample pre {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.userBulkTextarea {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.userBulkFailList {
+  max-height: 240px;
+  overflow: auto;
+}

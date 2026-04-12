@@ -1,0 +1,28 @@
+.rolePermEdit .rolePermEditBar {
+  margin-bottom: 8px;
+}
+
+.rolePermEdit .rolePermEditCard {
+  margin-top: 8px;
+}
+
+.rolePermEdit .rolePermCheckboxGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rolePermEdit .rolePermCheckboxGroup .ant-checkbox-wrapper {
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.rolePermEdit .rolePermName {
+  margin-right: 8px;
+}
+
+.rolePermEdit .rolePermCodeTag {
+  font-size: 11px;
+  margin-inline: 0;
+  vertical-align: middle;
+}

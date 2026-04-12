@@ -1,0 +1,40 @@
+.projectListForm {
+  margin-top: 8px;
+}
+
+.projectListDatePicker {
+  width: 100%;
+}
+
+.projectListStatusSelect {
+  width: 100%;
+}
+
+.projectListApprovalLead {
+  margin-bottom: 8px !important;
+  font-size: 13px;
+}
+
+.projectListApprovalRow {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.projectListApprovalTitle {
+  flex: 1;
+  min-width: 160px;
+  margin-bottom: 8px !important;
+}
+
+.projectListApprovalUser {
+  flex: 1.2;
+  min-width: 240px;
+  margin-bottom: 8px !important;
+}
+
+.projectListApprovalRemove {
+  color: var(--ant-color-error, #ff4d4f);
+  font-size: 18px;
+  cursor: pointer;
+  padding-top: 8px;
+}

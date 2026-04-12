@@ -1,0 +1,9 @@
+.rolePermList .rolePermListTable {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.rolePermList .rolePermListTable .ant-table {
+  border-radius: 12px;
+}

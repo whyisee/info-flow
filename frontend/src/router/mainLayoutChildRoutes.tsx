@@ -1,8 +1,11 @@
+import { lazy, Suspense } from "react";
+import { Spin } from "antd";
 import { Navigate } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 import Dashboard from "../pages/Dashboard";
 import ProjectList from "../pages/projects/ProjectList";
 import ProjectDeclarationConfig from "../pages/projects/ProjectDeclarationConfig";
+import ProjectApprovalFlowConfig from "../pages/projects/ProjectApprovalFlowConfig";
 import MaterialList from "../pages/materials/MaterialList";
 import MaterialForm from "../pages/materials/MaterialForm";
 import ApprovalCenterPage from "../pages/approvals/ApprovalCenterPage";
@@ -20,6 +23,14 @@ import PermissionCatalog from "../pages/system/PermissionCatalog";
 import RolePermissionList from "../pages/system/RolePermissionList";
 import RolePermissionEdit from "../pages/system/RolePermissionEdit";
 
+const ProjectApprovalFlowEdit = lazy(() => import("../pages/projects/ProjectApprovalFlowEdit"));
+
+const approvalFlowEditFallback = (
+  <div style={{ padding: 48, textAlign: "center" }}>
+    <Spin size="large" tip="加载画布编辑器…" />
+  </div>
+);
+
 /**
  * MainLayout 下子路由（与 createBrowserRouter 共用）。
  * 标签切换不 navigate 时，由 MainLayout 用 useRoutes(..., { pathname }) 按路径渲染缓存面板。
@@ -32,6 +43,18 @@ export const mainLayoutChildRoutes: RouteObject[] = [
   {
     path: "declaration/projects/:projectId/config",
     element: <ProjectDeclarationConfig />,
+  },
+  {
+    path: "declaration/projects/:projectId/approval-flow/:configId/edit",
+    element: (
+      <Suspense fallback={approvalFlowEditFallback}>
+        <ProjectApprovalFlowEdit />
+      </Suspense>
+    ),
+  },
+  {
+    path: "declaration/projects/:projectId/approval-flow",
+    element: <ProjectApprovalFlowConfig />,
   },
   { path: "declaration/materials", element: <MaterialList /> },
   {

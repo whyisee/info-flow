@@ -1,0 +1,37 @@
+.projectApprovalFlowEditPage {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* 与 MainLayout 联动：占满标签内容区高度，画布无额外卡片嵌套 */
+.projectApprovalFlowEditPage--canvasFill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.projectApprovalFlowEditHeader.projectDeclarationPageHeader {
+  margin-bottom: 0;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.projectApprovalFlowEditMain {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.projectApprovalFlowEditLoading,
+.projectApprovalFlowEditReadonly {
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}

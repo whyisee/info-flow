@@ -10,36 +10,20 @@ from app.models.material import ApplyMaterial
 from app.models.project import ApplyProject
 from app.models.user import User
 from app.schemas.material import MaterialCreate, MaterialOut, MaterialUpdate
-from app.schemas.project import ApprovalFlowStepDisplay, parse_project_flow
+from app.schemas.project import parse_project_flow
+from app.services.approval_flow_display import build_flow_step_displays
+from app.services.project_effective_approval_flow import get_effective_project_flow_dict
 
 router = APIRouter()
 
 ActiveRoleCode = Annotated[str | None, Depends(get_active_role_code)]
 
 
-def _snapshot_display(db, material: ApplyMaterial) -> list[ApprovalFlowStepDisplay] | None:
+def _snapshot_display(db, material: ApplyMaterial):
     flow = parse_project_flow(material.approval_snapshot)
     if not flow:
         return None
-    all_ids: set[int] = set()
-    for s in flow.steps:
-        all_ids.update(s.assignee_user_ids)
-    users = (
-        db.execute(select(User).where(User.id.in_(all_ids))).scalars().all()
-        if all_ids
-        else []
-    )
-    by_id = {u.id: u.name for u in users}
-    return [
-        ApprovalFlowStepDisplay(
-            title=s.title,
-            assignee_user_ids=list(s.assignee_user_ids),
-            assignee_names="、".join(
-                by_id.get(uid, f"用户{uid}") for uid in s.assignee_user_ids
-            ),
-        )
-        for s in flow.steps
-    ]
+    return build_flow_step_displays(db, flow, applicant_user_id=material.user_id)
 
 
 def _material_to_out(db, material: ApplyMaterial) -> MaterialOut:
@@ -126,7 +110,7 @@ def submit_material(material_id: int, db: DbSession, current_user: CurrentUser):
     project = db.get(ApplyProject, material.project_id)
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
-    flow = parse_project_flow(project.approval_flow)
+    flow = parse_project_flow(get_effective_project_flow_dict(db, project))
     if flow:
         material.approval_snapshot = flow.model_dump()
     else:

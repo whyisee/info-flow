@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api import (
+    approval_flow_config,
     approvals,
     attachments,
     auth,
@@ -25,6 +26,9 @@ api_router.include_router(data_dict.router, prefix="/system", tags=["Data dict"]
 api_router.include_router(projects.router, prefix="/projects", tags=["Projects"])
 api_router.include_router(
     declaration_config.router, prefix="/projects", tags=["Project declaration config"]
+)
+api_router.include_router(
+    approval_flow_config.router, prefix="/projects", tags=["Project approval flow config"]
 )
 api_router.include_router(materials.router, prefix="/materials", tags=["Materials"])
 api_router.include_router(attachments.router, prefix="/attachments", tags=["Attachments"])

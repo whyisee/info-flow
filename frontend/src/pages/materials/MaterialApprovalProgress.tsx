@@ -156,13 +156,22 @@ export default function MaterialApprovalProgress({
             className="materialApprovalProgressPlan"
           >
             {planRows.map((s, i) => (
-              <Descriptions.Item key={`${s.title}-${i}`} label={s.title}>
-                {s.assignee_names}
-                {snapshotDisplayProp?.length ? (
-                  <Typography.Text type="secondary" className="materialApprovalProgressCosign">
-                    （会签须全员通过）
-                  </Typography.Text>
-                ) : null}
+              <Descriptions.Item
+                key={`${s.kind ?? 'approval'}-${s.title}-${i}`}
+                label={s.kind === 'parallel' ? `${s.title}（并行）` : s.title}
+              >
+                {s.kind === 'parallel' && s.lanes?.length ? (
+                  <ul className="materialApprovalProgressLaneList">
+                    {s.lanes.map((ln, j) => (
+                      <li key={`${ln.title}-${j}`}>
+                        <span className="materialApprovalProgressLaneTitle">{ln.title}</span>
+                        <span className="materialApprovalProgressLaneNames">{ln.assignee_names}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  s.assignee_names
+                )}
               </Descriptions.Item>
             ))}
           </Descriptions>
@@ -201,7 +210,9 @@ export default function MaterialApprovalProgress({
                 <span className="materialApprovalProgressAction">
                   {APPROVAL_STATUS[r.status] ?? r.status}
                   {r.step_index != null && r.status === 1
-                    ? ` · 环节 ${(r.step_index as number) + 1}`
+                    ? ` · 环节 ${(r.step_index as number) + 1}${
+                        r.lane_index != null ? ` · 子轨 ${r.lane_index + 1}` : ""
+                      }`
                     : ""}
                 </span>
               </div>

@@ -500,3 +500,26 @@
 .mainTabPanel[hidden] {
   display: none !important;
 }
+
+/* 审批流画布编辑：内容区贴边铺满，由页内自身滚动/平移，避免 outlet 内边距与多层卡片感 */
+.mainOutletWrap:has(.projectApprovalFlowEditPage--canvasFill) {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mainOutletWrap:has(.projectApprovalFlowEditPage--canvasFill) .mainTabPanels {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mainOutletWrap:has(.projectApprovalFlowEditPage--canvasFill) .mainTabPanel:not([hidden]) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

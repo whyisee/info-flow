@@ -58,6 +58,12 @@ export function getTabLabel(pathname: string): string {
   if (m) return `申报 #${m[1]}`;
   const cfg = pathname.match(/^\/declaration\/projects\/(\d+)\/config$/);
   if (cfg) return `申报配置 · 项目${cfg[1]}`;
+  const af = pathname.match(/^\/declaration\/projects\/(\d+)\/approval-flow$/);
+  if (af) return `审批流程 · 项目${af[1]}`;
+  const afe = pathname.match(
+    /^\/declaration\/projects\/(\d+)\/approval-flow\/(\d+)\/edit$/,
+  );
+  if (afe) return `编辑审批流 · 项目${afe[1]} · 配置${afe[2]}`;
   return pathname;
 }
 

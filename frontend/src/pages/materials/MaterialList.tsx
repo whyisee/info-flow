@@ -58,7 +58,7 @@ function buildAppliedFilter(values: {
       : projectRaw;
   const raw = values.status;
   const status =
-    raw === undefined || raw === null || raw === "" ? "all" : raw;
+    raw === undefined || raw === null ? "all" : raw;
   return { keyword, project_id, status };
 }
 

@@ -13,13 +13,12 @@ import {
   DatePicker,
   Select,
   Tooltip,
-  Typography,
 } from 'antd'
-import { DownOutlined, MinusCircleOutlined, PlusOutlined, UpOutlined } from '@ant-design/icons'
+import { DownOutlined, PlusOutlined, UpOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import zhCN from 'antd/es/locale/zh_CN'
 import type { Dayjs } from 'dayjs'
-import type { ApprovalFlowConfig, ApproverOption, Project } from '../../types'
+import type { Project } from '../../types'
 import { PROJECT_STATUS } from '../../utils/constants'
 import * as projectService from '../../services/projects'
 import '../users/UserList.css'
@@ -33,15 +32,6 @@ type ProjectFormValues = {
   start_time: Dayjs
   end_time: Dayjs
   status?: number
-  approval_flow?: {
-    steps: { title?: string; assignee_user_ids?: number[] }[]
-  }
-}
-
-function defaultApprovalFlow() {
-  return {
-    steps: [{ title: '初审', assignee_user_ids: [] as number[] }],
-  }
 }
 
 const statusOptions = Object.entries(PROJECT_STATUS).map(([value, label]) => ({
@@ -86,7 +76,6 @@ export default function ProjectList() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [approverOptions, setApproverOptions] = useState<ApproverOption[]>([])
   const [form] = Form.useForm<ProjectFormValues>()
   const [filterForm] = Form.useForm()
   const [filterMoreOpen, setFilterMoreOpen] = useState(false)
@@ -112,14 +101,6 @@ export default function ProjectList() {
   useEffect(() => {
     fetchProjects()
   }, [fetchProjects])
-
-  useEffect(() => {
-    if (!modalOpen) return
-    projectService
-      .getApproverCandidates()
-      .then(setApproverOptions)
-      .catch(() => setApproverOptions([]))
-  }, [modalOpen])
 
   const filteredProjects = useMemo(
     () => projects.filter((p) => projectMatchesFilter(p, appliedFilter)),
@@ -155,26 +136,17 @@ export default function ProjectList() {
   const openCreate = () => {
     setEditingId(null)
     form.resetFields()
-    form.setFieldsValue({
-      approval_flow: defaultApprovalFlow(),
-    })
     setModalOpen(true)
   }
 
   const openEdit = (record: Project) => {
     setEditingId(record.id)
-    const stepsIn =
-      record.approval_flow?.steps?.map((s) => ({
-        title: s.title,
-        assignee_user_ids: Array.isArray(s.assignee_user_ids) ? [...s.assignee_user_ids] : [],
-      })) ?? []
     form.setFieldsValue({
       name: record.name,
       description: record.description,
       start_time: dayjs(record.start_time),
       end_time: dayjs(record.end_time),
       status: record.status,
-      approval_flow: stepsIn.length > 0 ? { steps: stepsIn } : defaultApprovalFlow(),
     })
     setModalOpen(true)
   }
@@ -187,38 +159,11 @@ export default function ProjectList() {
         return
       }
       setSubmitting(true)
-      const steps = values.approval_flow?.steps
-      let approval_flow: ApprovalFlowConfig | null = null
-      if (steps && steps.length >= 1) {
-        const anyPick = steps.some((s) => (s.assignee_user_ids?.length ?? 0) > 0)
-        if (anyPick) {
-          const complete = steps.every(
-            (s) =>
-              Boolean(s.title?.trim()) &&
-              Array.isArray(s.assignee_user_ids) &&
-              s.assignee_user_ids.length >= 1,
-          )
-          if (!complete) {
-            message.error(
-              '审批流程：每一环节均须填写名称并至少指定一名会签人；或清空所有环节的审批人（按角色匹配）',
-            )
-            return
-          }
-          approval_flow = {
-            steps: steps.map((s) => ({
-              title: s.title!.trim(),
-              assignee_user_ids: s.assignee_user_ids!.map(Number),
-            })),
-          }
-        }
-      }
-
       const payload = {
         name: values.name.trim(),
         description: values.description?.trim() || undefined,
         start_time: values.start_time.toISOString(),
         end_time: values.end_time.toISOString(),
-        approval_flow,
       }
       if (editingId === null) {
         await projectService.createProject(payload)
@@ -290,7 +235,7 @@ export default function ProjectList() {
     {
       title: '操作',
       key: 'action',
-      width: 360,
+      width: 440,
       fixed: 'right' as const,
       render: (_: unknown, record: Project) => (
         <Space wrap size="small">
@@ -300,6 +245,13 @@ export default function ProjectList() {
             onClick={() => navigate(`/declaration/projects/${record.id}/config`)}
           >
             申报配置
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => navigate(`/declaration/projects/${record.id}/approval-flow`)}
+          >
+            配置审批流程
           </Button>
           <Button type="link" size="small" onClick={() => openEdit(record)}>
             编辑
@@ -447,64 +399,6 @@ export default function ProjectList() {
               <Select className="projectListStatusSelect" options={statusOptions} placeholder="状态" />
             </Form.Item>
           )}
-          <Typography.Paragraph type="secondary" className="projectListApprovalLead">
-            审批流程（可选）：可增删环节；每环节可选多名审批人（会签，须全员通过方可进入下一环节）。全部环节不指定审批人时，仍按账号角色（院系/校级/专家）匹配。
-          </Typography.Paragraph>
-          <Form.List name={['approval_flow', 'steps']}>
-            {(fields, { add, remove }) => (
-              <>
-                {fields.map(({ key, name, ...fieldRest }, index) => (
-                  <Space key={key} className="projectListApprovalRow" align="start" wrap>
-                    <Form.Item
-                      {...fieldRest}
-                      name={[name, 'title']}
-                      label={index === 0 ? '环节名称' : ' '}
-                      className="projectListApprovalTitle"
-                      rules={[{ required: true, message: '填写环节名称' }]}
-                    >
-                      <Input placeholder={`第 ${index + 1} 环节名称`} maxLength={120} />
-                    </Form.Item>
-                    <Form.Item
-                      {...fieldRest}
-                      name={[name, 'assignee_user_ids']}
-                      label={index === 0 ? '会签审批人' : ' '}
-                      className="projectListApprovalUser"
-                      rules={[{ required: false }]}
-                    >
-                      <Select
-                        mode="multiple"
-                        allowClear
-                        showSearch
-                        optionFilterProp="label"
-                        placeholder="选择一名或多名用户"
-                        style={{ minWidth: 280 }}
-                        options={approverOptions.map((u) => ({
-                          value: u.id,
-                          label: `${u.name}（${u.username} · ${u.role}）`,
-                        }))}
-                      />
-                    </Form.Item>
-                    {fields.length > 1 ? (
-                      <MinusCircleOutlined
-                        className="projectListApprovalRemove"
-                        onClick={() => remove(name)}
-                      />
-                    ) : null}
-                  </Space>
-                ))}
-                <Form.Item>
-                  <Button
-                    type="dashed"
-                    onClick={() => add({ title: '', assignee_user_ids: [] })}
-                    block
-                    icon={<PlusOutlined />}
-                  >
-                    增加审批环节
-                  </Button>
-                </Form.Item>
-              </>
-            )}
-          </Form.List>
         </Form>
       </Modal>
     </div>

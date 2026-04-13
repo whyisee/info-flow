@@ -4,6 +4,7 @@ import {
   Drawer,
   Input,
   Modal,
+  Select,
   Space,
   Table,
   Tabs,
@@ -178,8 +179,17 @@ function PendingApprovalsPanel() {
   const handleAction = async (
     materialId: number,
     action: "approve" | "return" | "reject",
+    record?: ApprovalRecord,
   ) => {
     let comment = "";
+    const pendingLanes = record?.pending_parallel_lane_indexes;
+    const needParallelPick =
+      (action === "approve" || action === "return") &&
+      pendingLanes &&
+      pendingLanes.length > 1;
+    let laneIndex: number | null | undefined =
+      pendingLanes?.length === 1 ? pendingLanes[0] : undefined;
+
     Modal.confirm({
       title:
         action === "approve"
@@ -188,21 +198,50 @@ function PendingApprovalsPanel() {
             ? "退回修改"
             : "驳回",
       content: (
-        <Input.TextArea
-          placeholder="请输入意见"
-          onChange={(e) => {
-            comment = e.target.value;
-          }}
-        />
+        <div className="approvalCenterActionModal">
+          {needParallelPick ? (
+            <Select
+              placeholder="请选择并行子轨"
+              style={{ width: "100%", marginBottom: 12 }}
+              options={pendingLanes.map((i) => ({
+                value: i,
+                label: `子轨 ${i + 1}`,
+              }))}
+              onChange={(v) => {
+                laneIndex = v;
+              }}
+            />
+          ) : null}
+          <Input.TextArea
+            placeholder="请输入意见"
+            onChange={(e) => {
+              comment = e.target.value;
+            }}
+          />
+        </div>
       ),
       onOk: async () => {
+        if (needParallelPick && (laneIndex === undefined || laneIndex === null)) {
+          message.error("请选择并行子轨");
+          return Promise.reject(new Error("no lane"));
+        }
         const fn =
           action === "approve"
             ? approvalService.approve
             : action === "return"
               ? approvalService.returnMaterial
               : approvalService.reject;
-        await fn(materialId, comment);
+        const laneArg =
+          action === "reject"
+            ? undefined
+            : pendingLanes && pendingLanes.length === 1
+              ? pendingLanes[0]
+              : laneIndex;
+        await fn(
+          materialId,
+          comment,
+          laneArg === undefined ? undefined : laneArg,
+        );
         message.success("操作成功");
         fetchPending();
       },
@@ -245,20 +284,20 @@ function PendingApprovalsPanel() {
                 <Button
                   type="primary"
                   size="small"
-                  onClick={() => handleAction(record.material_id, "approve")}
+                  onClick={() => handleAction(record.material_id, "approve", record)}
                 >
                   通过
                 </Button>
                 <Button
                   size="small"
-                  onClick={() => handleAction(record.material_id, "return")}
+                  onClick={() => handleAction(record.material_id, "return", record)}
                 >
                   退回
                 </Button>
                 <Button
                   danger
                   size="small"
-                  onClick={() => handleAction(record.material_id, "reject")}
+                  onClick={() => handleAction(record.material_id, "reject", record)}
                 >
                   驳回
                 </Button>

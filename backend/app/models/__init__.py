@@ -3,6 +3,7 @@ from app.models.user import User
 from app.models.user_module_config import UserModuleConfig
 from app.models.project import ApplyProject
 from app.models.project_declaration_config import ProjectDeclarationConfig
+from app.models.project_approval_flow_config import ProjectApprovalFlowConfig
 from app.models.material import ApplyMaterial
 from app.models.attachment import FileAttachment
 from app.models.approval import ApproveRecord
@@ -15,6 +16,7 @@ __all__ = [
     "UserModuleConfig",
     "ApplyProject",
     "ProjectDeclarationConfig",
+    "ProjectApprovalFlowConfig",
     "ApplyMaterial",
     "FileAttachment",
     "ApproveRecord",

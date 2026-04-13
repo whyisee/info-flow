@@ -93,3 +93,7 @@ npm run dev
 | Attachments | /api/attachments | 文件上传下载 |
 | Approvals   | /api/approvals   | 审批流程     |
 | Templates   | /api/templates   | 模板管理     |
+
+## License
+
+本项目采用 **GNU General Public License v3.0**（GPL-3.0）开源，详见根目录 `LICENSE` 文件。

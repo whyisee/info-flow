@@ -18,3 +18,7 @@
 .approvalCenterPanel {
   width: 100%;
 }
+
+.approvalCenterActionModal {
+  min-width: 280px;
+}

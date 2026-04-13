@@ -1,4 +1,4 @@
-import type { ApprovalFlowConfig, ApproverOption, Project } from '../types'
+import type { ApproverOption, Project } from '../types'
 import request from './request'
 
 export const getProjects = () =>
@@ -15,7 +15,6 @@ export const createProject = (data: {
   description?: string
   start_time: string
   end_time: string
-  approval_flow?: ApprovalFlowConfig | null
 }) => request.post<unknown, Project>('/projects/', data)
 
 export const updateProject = (
@@ -26,7 +25,6 @@ export const updateProject = (
     start_time?: string
     end_time?: string
     status?: number
-    approval_flow?: ApprovalFlowConfig | null
   },
 ) => request.put<unknown, Project>(`/projects/${id}`, data)
 

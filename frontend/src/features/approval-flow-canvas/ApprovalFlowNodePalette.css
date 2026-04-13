@@ -1,0 +1,208 @@
+.afcPaletteWrap {
+  width: 228px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  overflow: hidden;
+}
+
+.afcPaletteHeader {
+  padding: 8px 6px 4px;
+  flex-shrink: 0;
+}
+
+.afcPaletteHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+
+.afcPaletteToolbar {
+  flex-shrink: 0;
+}
+
+.afcPaletteToolBtn {
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  color: #475569 !important;
+}
+
+.afcPaletteToolBtn:hover {
+  color: var(--afc-accent, #4f46e5) !important;
+  background: rgba(79, 70, 229, 0.08) !important;
+}
+
+.afcPaletteTitle {
+  margin: 0 !important;
+  font-size: 14px !important;
+  flex: 1;
+  min-width: 0;
+}
+
+.afcPaletteCollapse {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 2px 8px;
+}
+
+.afcPaletteCollapse .ant-collapse-item {
+  border-bottom: none !important;
+}
+
+.afcPaletteCollapse .ant-collapse-header {
+  padding: 6px 6px !important;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155 !important;
+}
+
+.afcPaletteCollapse .ant-collapse-content-box {
+  padding: 0 2px 6px !important;
+}
+
+/* 每行 3 个节点 */
+.afcPaletteSection {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  align-items: start;
+}
+
+.afcPaletteItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #f8fafc;
+  user-select: none;
+}
+
+.afcPaletteSection .afcPaletteItem {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: center;
+  gap: 4px;
+  padding: 5px 2px 4px;
+  min-height: 0;
+}
+
+.afcPaletteSection .afcPaletteItemIcon {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.afcPaletteSection .afcPaletteItemText {
+  align-items: center;
+  width: 100%;
+}
+
+.afcPaletteSection .afcPaletteItemTitle {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* 三列下隐藏副标题，完整说明见 Tooltip */
+.afcPaletteSection .afcPaletteItemSub {
+  display: none;
+}
+
+/* 「规划中」保留一行 */
+.afcPaletteSection .afcPaletteItemDisabled .afcPaletteItemSub {
+  display: block;
+  font-size: 9px;
+  line-height: 1.15;
+  margin-top: 0;
+}
+
+.afcPaletteItemDraggable {
+  cursor: grab;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.12s ease;
+}
+
+.afcPaletteItemDraggable:hover {
+  border-color: rgba(79, 70, 229, 0.35);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.1);
+}
+
+.afcPaletteItemDraggable:active {
+  cursor: grabbing;
+  transform: scale(0.99);
+}
+
+.afcPaletteItemStatic {
+  opacity: 0.85;
+  cursor: default;
+  background: #f1f5f9;
+}
+
+.afcPaletteItemStatic .afcPaletteItemIcon {
+  color: #64748b;
+  background: rgba(100, 116, 139, 0.12);
+}
+
+.afcPaletteItemDisabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: #f1f5f9;
+}
+
+.afcPaletteItemIcon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #4f46e5;
+  background: rgba(79, 70, 229, 0.1);
+}
+
+.afcPaletteItemDisabled .afcPaletteItemIcon {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.15);
+}
+
+.afcPaletteItemText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.afcPaletteItemTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.afcPaletteItemSub {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.35;
+}

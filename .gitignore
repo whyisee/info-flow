@@ -33,5 +33,6 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
+
 # Alembic
 backend/alembic/versions/*.pyc

@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Drawer,
   Input,
-  Modal,
   Select,
   Space,
   Table,
@@ -21,7 +20,9 @@ import {
 import * as approvalService from "../../services/approvals";
 import * as materialService from "../../services/materials";
 import * as projectService from "../../services/projects";
+import * as userService from "../../services/users";
 import { useAuth } from "../../store/AuthContext";
+import { useNavigate } from "react-router-dom";
 import MaterialApprovalProgress from "../materials/MaterialApprovalProgress";
 import "./ApprovalCenterPage.css";
 
@@ -157,107 +158,162 @@ function MyProgressPanel() {
 }
 
 function PendingApprovalsPanel() {
+  const navigate = useNavigate();
   const [records, setRecords] = useState<ApprovalRecord[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [users, setUsers] = useState<{ id: number; name: string; username: string }[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchPending = async () => {
+  const [qMaterialId, setQMaterialId] = useState("");
+  const [qProjectId, setQProjectId] = useState<number | null>(null);
+  const [qStatus, setQStatus] = useState<number | null>(null);
+
+  const projectNameById = useMemo(() => {
+    const m = new Map<number, string>();
+    projects.forEach((p) => m.set(p.id, p.name));
+    return m;
+  }, [projects]);
+
+  const materialById = useMemo(() => {
+    const m = new Map<number, Material>();
+    materials.forEach((row) => m.set(row.id, row));
+    return m;
+  }, [materials]);
+
+  const userLabelById = useMemo(() => {
+    const m = new Map<number, string>();
+    users.forEach((u) => {
+      const label = u.name?.trim() ? `${u.name}（${u.username}）` : u.username;
+      m.set(u.id, label);
+    });
+    return m;
+  }, [users]);
+
+  const fetchPending = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await approvalService.getPendingApprovals();
+      const [data, mats, projs, us] = await Promise.all([
+        approvalService.getPendingApprovals(),
+        materialService.getMaterials(),
+        projectService.getProjects(),
+        userService.listUsers({ user_status: "active" }).catch(() => []),
+      ]);
       setRecords(data);
+      setMaterials(mats);
+      setProjects(projs);
+      setUsers(us.map((u) => ({ id: u.id, name: u.name, username: u.username })));
     } catch {
       message.error("获取待审批列表失败");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchPending();
-  }, []);
+  }, [fetchPending]);
 
-  const handleAction = async (
-    materialId: number,
-    action: "approve" | "return" | "reject",
-    record?: ApprovalRecord,
-  ) => {
-    let comment = "";
-    const pendingLanes = record?.pending_parallel_lane_indexes;
-    const needParallelPick =
-      (action === "approve" || action === "return") &&
-      pendingLanes &&
-      pendingLanes.length > 1;
-    let laneIndex: number | null | undefined =
-      pendingLanes?.length === 1 ? pendingLanes[0] : undefined;
+  const projectOptions = useMemo(() => {
+    return projects.map((p) => ({ value: p.id, label: p.name }));
+  }, [projects]);
 
-    Modal.confirm({
-      title:
-        action === "approve"
-          ? "审批通过"
-          : action === "return"
-            ? "退回修改"
-            : "驳回",
-      content: (
-        <div className="approvalCenterActionModal">
-          {needParallelPick ? (
-            <Select
-              placeholder="请选择并行子轨"
-              style={{ width: "100%", marginBottom: 12 }}
-              options={pendingLanes.map((i) => ({
-                value: i,
-                label: `子轨 ${i + 1}`,
-              }))}
-              onChange={(v) => {
-                laneIndex = v;
-              }}
-            />
-          ) : null}
-          <Input.TextArea
-            placeholder="请输入意见"
-            onChange={(e) => {
-              comment = e.target.value;
-            }}
-          />
-        </div>
-      ),
-      onOk: async () => {
-        if (needParallelPick && (laneIndex === undefined || laneIndex === null)) {
-          message.error("请选择并行子轨");
-          return Promise.reject(new Error("no lane"));
-        }
-        const fn =
-          action === "approve"
-            ? approvalService.approve
-            : action === "return"
-              ? approvalService.returnMaterial
-              : approvalService.reject;
-        const laneArg =
-          action === "reject"
-            ? undefined
-            : pendingLanes && pendingLanes.length === 1
-              ? pendingLanes[0]
-              : laneIndex;
-        await fn(
-          materialId,
-          comment,
-          laneArg === undefined ? undefined : laneArg,
-        );
-        message.success("操作成功");
-        fetchPending();
-      },
+  const filtered = useMemo(() => {
+    const mid = qMaterialId.trim();
+    const midNum = mid && /^\d+$/.test(mid) ? Number(mid) : null;
+    return records.filter((r) => {
+      if (midNum != null && r.material_id !== midNum) return false;
+      if (qStatus != null && r.status !== qStatus) return false;
+      if (qProjectId != null) {
+        const m = materialById.get(r.material_id);
+        if (!m || m.project_id !== qProjectId) return false;
+      }
+      return true;
     });
-  };
+  }, [materialById, qMaterialId, qProjectId, qStatus, records]);
 
   return (
     <div className="approvalCenterPanel">
-      <Space style={{ marginBottom: 12 }}>
-        <Button icon={<ReloadOutlined />} onClick={fetchPending} loading={loading}>
-          刷新
-        </Button>
-      </Space>
+      <div className="approvalCenterPanelHeader">
+        <Space wrap className="approvalCenterFilters">
+          <Input
+            allowClear
+            value={qMaterialId}
+            placeholder="材料ID"
+            className="approvalCenterFilterInput"
+            onChange={(e) => setQMaterialId(e.target.value)}
+            onPressEnter={fetchPending}
+          />
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="项目"
+            className="approvalCenterFilterSelect"
+            options={projectOptions}
+            value={qProjectId ?? undefined}
+            onChange={(v) => setQProjectId(v == null ? null : Number(v))}
+          />
+          <Select
+            allowClear
+            placeholder="状态"
+            className="approvalCenterFilterSelect"
+            value={qStatus ?? undefined}
+            onChange={(v) => setQStatus(v == null ? null : Number(v))}
+            options={[
+              { value: 0, label: "草稿" },
+              { value: 5, label: "已驳回" },
+              { value: 1, label: "第 1 环节" },
+              { value: 2, label: "第 2 环节" },
+              { value: 3, label: "第 3 环节" },
+              { value: 4, label: "已通过(3环节)" },
+            ]}
+          />
+          <Button icon={<ReloadOutlined />} onClick={fetchPending} loading={loading}>
+            刷新
+          </Button>
+          <Button
+            onClick={() => {
+              setQMaterialId("");
+              setQProjectId(null);
+              setQStatus(null);
+            }}
+          >
+            重置
+          </Button>
+        </Space>
+        <Typography.Text type="secondary">
+          共 {filtered.length} 条
+        </Typography.Text>
+      </div>
       <Table
         columns={[
-          { title: "材料ID", dataIndex: "material_id", key: "material_id" },
+          {
+            title: "材料",
+            dataIndex: "material_id",
+            key: "material_id",
+            width: 120,
+            render: (id: number) => `#${id}`,
+          },
+          {
+            title: "项目",
+            key: "project",
+            render: (_: unknown, record: ApprovalRecord) => {
+              const m = materialById.get(record.material_id);
+              if (!m) return "—";
+              return projectNameById.get(m.project_id) ?? `项目 #${m.project_id}`;
+            },
+          },
+          {
+            title: "提交人",
+            key: "submitter",
+            width: 180,
+            render: (_: unknown, record: ApprovalRecord) => {
+              const m = materialById.get(record.material_id);
+              if (!m) return "—";
+              return userLabelById.get(m.user_id) ?? `用户 #${m.user_id}`;
+            },
+          },
           {
             title: "当前环节",
             dataIndex: "status",
@@ -277,35 +333,44 @@ function PendingApprovalsPanel() {
             },
           },
           {
+            title: "提交时间",
+            key: "submitted_at",
+            width: 200,
+            render: (_: unknown, record: ApprovalRecord) => {
+              const m = materialById.get(record.material_id);
+              return m?.submitted_at ?? "—";
+            },
+          },
+          {
+            title: "并行待办",
+            key: "parallel",
+            width: 140,
+            render: (_: unknown, record: ApprovalRecord) => {
+              const lanes = record.pending_parallel_lane_indexes;
+              if (!lanes || lanes.length === 0) return "—";
+              if (lanes.length === 1) return `子轨 ${lanes[0] + 1}`;
+              return `${lanes.length} 条子轨待办`;
+            },
+          },
+          {
             title: "操作",
             key: "action",
+            width: 120,
             render: (_: unknown, record: ApprovalRecord) => (
-              <Space>
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={() => handleAction(record.material_id, "approve", record)}
-                >
-                  通过
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() => handleAction(record.material_id, "return", record)}
-                >
-                  退回
-                </Button>
-                <Button
-                  danger
-                  size="small"
-                  onClick={() => handleAction(record.material_id, "reject", record)}
-                >
-                  驳回
-                </Button>
-              </Space>
+              <Button
+                type="primary"
+                onClick={() => {
+                  navigate(`/declaration/approvals/process/${record.material_id}`, {
+                    state: { from: "pending" },
+                  });
+                }}
+              >
+                处理
+              </Button>
             ),
           },
         ]}
-        dataSource={records}
+        dataSource={filtered}
         rowKey="material_id"
         loading={loading}
       />

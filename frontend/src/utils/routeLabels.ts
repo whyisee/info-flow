@@ -56,6 +56,8 @@ export function getTabLabel(pathname: string): string {
   if (pathname === "/declaration/materials/new") return "新建申报";
   const m = pathname.match(/^\/declaration\/materials\/(\d+)$/);
   if (m) return `申报 #${m[1]}`;
+  const ap = pathname.match(/^\/declaration\/approvals\/process\/(\d+)$/);
+  if (ap) return `处理 · 申报 #${ap[1]}`;
   const cfg = pathname.match(/^\/declaration\/projects\/(\d+)\/config$/);
   if (cfg) return `申报配置 · 项目${cfg[1]}`;
   const af = pathname.match(/^\/declaration\/projects\/(\d+)\/approval-flow$/);

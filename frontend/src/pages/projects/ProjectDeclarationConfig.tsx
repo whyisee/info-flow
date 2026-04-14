@@ -19,6 +19,7 @@ import {
   SAMPLE_DECLARATION_CONFIG,
 } from "./declarationConfigSample";
 import { DeclarationConfigEditModal } from "./DeclarationConfigEditModal";
+import { DeclarationConfigCopyModal } from "./DeclarationConfigCopyModal";
 import "./ProjectDeclarationConfig.css";
 
 const statusLabel: Record<string, { color: string; text: string }> = {
@@ -38,6 +39,7 @@ export default function ProjectDeclarationConfig() {
   const [editingRecord, setEditingRecord] = useState<DeclarationConfigRecord | null>(
     null,
   );
+  const [copyOpen, setCopyOpen] = useState(false);
   /** 每次打开编辑递增，保证弹窗内 useLayoutEffect 一定重新灌入表单（避免 config 未变时跳过） */
   const [editorHydrateKey, setEditorHydrateKey] = useState(0);
 
@@ -99,6 +101,33 @@ export default function ProjectDeclarationConfig() {
     }
   };
 
+  const copyCreateVersion = async (args: { sourceId: number; label?: string }) => {
+    const source = rows.find((r) => r.id === args.sourceId);
+    if (!source) {
+      message.error("源版本不存在或已刷新");
+      return;
+    }
+    setLoading(true);
+    try {
+      // 深拷贝：避免引用共享导致后续编辑出现奇怪的“连带修改”
+      const config = JSON.parse(JSON.stringify(source.config ?? {})) as Record<
+        string,
+        unknown
+      >;
+      await declarationConfigApi.createDeclarationConfig(projectId, {
+        label: args.label?.trim() || `复制自 v${source.version}`,
+        config,
+      });
+      message.success("已复制新建版本");
+      setCopyOpen(false);
+      loadAll();
+    } catch {
+      message.error("复制新建失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const publish = async (record: DeclarationConfigRecord) => {
     try {
       await declarationConfigApi.publishDeclarationConfig(projectId, record.id);
@@ -132,6 +161,9 @@ export default function ProjectDeclarationConfig() {
           </Button>
           <Button type="primary" onClick={() => createVersion(true)} loading={loading}>
             新建示例版本
+          </Button>
+          <Button onClick={() => setCopyOpen(true)} loading={loading} disabled={!rows.length}>
+            复制新建
           </Button>
         </Space>
       </div>
@@ -194,6 +226,14 @@ export default function ProjectDeclarationConfig() {
           setEditingRecord(null);
         }}
         onSaved={loadAll}
+      />
+
+      <DeclarationConfigCopyModal
+        open={copyOpen}
+        loading={loading}
+        rows={rows}
+        onCancel={() => setCopyOpen(false)}
+        onOk={(args) => void copyCreateVersion(args)}
       />
     </div>
   );

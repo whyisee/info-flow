@@ -1,6 +1,11 @@
 from functools import lru_cache
+from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+# backend/ 根目录（本文件为 backend/app/config.py）
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
@@ -14,6 +19,14 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+
+    @model_validator(mode="after")
+    def resolve_upload_dir(self) -> "Settings":
+        """相对 UPLOAD_DIR 固定解析到 backend 根下，避免 uvicorn 启动目录不同导致文件写到别处。"""
+        p = Path(self.UPLOAD_DIR)
+        if not p.is_absolute():
+            object.__setattr__(self, "UPLOAD_DIR", str((_BACKEND_ROOT / p).resolve()))
+        return self
 
 
 @lru_cache

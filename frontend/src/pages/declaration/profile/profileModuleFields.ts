@@ -33,9 +33,11 @@ const BASIC_KEYS = new Set([
   "highest_edu_country",
   "highest_edu_school",
   "highest_edu_level",
+  "highest_edu_proof_pdf",
   "highest_degree_country",
   "highest_degree_school",
   "highest_degree_level",
+  "highest_degree_proof_pdf",
   "work_region",
   "work_province",
   "work_unit_detail",
@@ -143,13 +145,32 @@ export function mergeModulesIntoFormValues(
   return merged;
 }
 
-function simplifyFileList(v: unknown): unknown {
+/** PDF 上传：优先持久化服务端 url；无 url 时保留 uid/name/status（兼容旧数据与上传中草稿），避免保存把字段清空 */
+function persistPdfFileList(v: unknown): unknown {
   if (!Array.isArray(v)) return v;
-  return v.map((f: { uid?: string; name?: string; status?: string }) => ({
-    uid: f.uid,
-    name: f.name,
-    status: f.status,
-  }));
+  return v
+    .map((item) => {
+      const f = item as UploadFile;
+      if (f.status === "removed") return null;
+      const url = getProfileFileUrlFromUploadFile(f);
+      if (url) {
+        return {
+          uid: f.uid,
+          name: f.name,
+          status: "done",
+          url,
+        };
+      }
+      if (f.uid != null && f.name != null) {
+        return {
+          uid: f.uid,
+          name: f.name,
+          status: f.status ?? "done",
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
 }
 
 /** 证件照：只存服务端返回的相对路径 url，不存 base64 / 本地 File */
@@ -185,8 +206,13 @@ export function serializeProfileForApi(
       out.birth_date = dayjs(d).format("YYYY-MM-DD");
     }
   }
-  for (const k of ["id_pdf", "birth_proof_pdf"] as const) {
-    if (k in out) out[k] = simplifyFileList(out[k]);
+  for (const k of [
+    "id_pdf",
+    "birth_proof_pdf",
+    "highest_edu_proof_pdf",
+    "highest_degree_proof_pdf",
+  ] as const) {
+    if (k in out) out[k] = persistPdfFileList(out[k]);
   }
   if ("id_photo" in out) {
     out.id_photo = persistIdPhotoList(out.id_photo);

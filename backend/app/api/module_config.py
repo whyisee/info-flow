@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy import select
 
-from app.core.deps import CurrentUser, DbSession
+from app.core.deps import CurrentUser, DbSession, require_any_permission
 from app.core.module_codes import ALLOWED_MODULES
+from app.models.user import User
 from app.models.user_module_config import UserModuleConfig
 from app.schemas.user_module_config import UserModuleConfigOut, UserModuleConfigUpsert
 
@@ -27,6 +28,20 @@ def list_my_module_configs(
         db.execute(
             select(UserModuleConfig).where(UserModuleConfig.user_id == current_user.id),
         )
+        .scalars()
+        .all()
+    )
+    return [UserModuleConfigOut.model_validate(r) for r in rows]
+
+@router.get("/{user_id}/module-configs", response_model=list[UserModuleConfigOut])
+def list_user_module_configs(
+    user_id: int,
+    db: DbSession,
+    _: User = Depends(require_any_permission("declaration:approval:process")),
+):
+    # allow approvers to view applicant profile module configs for preview
+    rows = (
+        db.execute(select(UserModuleConfig).where(UserModuleConfig.user_id == user_id))
         .scalars()
         .all()
     )

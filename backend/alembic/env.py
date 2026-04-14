@@ -7,12 +7,19 @@ from sqlalchemy import engine_from_config, pool
 # Add backend dir to path so we can import app
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.config import get_settings
 from app.database import Base
 from app.models import *  # noqa: F401,F403 - ensure all models are loaded
 
 config = context.config
 
 target_metadata = Base.metadata
+
+# Ensure alembic uses the same DATABASE_URL as the app (.env).
+settings = get_settings()
+if settings.DATABASE_URL:
+    # alembic Config uses ConfigParser interpolation; escape '%' in passwords.
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 
 def run_migrations_offline():

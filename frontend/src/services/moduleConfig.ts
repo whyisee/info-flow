@@ -16,6 +16,10 @@ export function listMyModuleConfigs(): Promise<UserModuleConfigDTO[]> {
   return request.get("/users/me/module-configs");
 }
 
+export function listUserModuleConfigs(userId: number): Promise<UserModuleConfigDTO[]> {
+  return request.get(`/users/${userId}/module-configs`);
+}
+
 export function getMyModuleConfig(module: string): Promise<UserModuleConfigDTO> {
   return request.get(`/users/me/module-configs/${encodeURIComponent(module)}`);
 }

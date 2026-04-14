@@ -9,6 +9,7 @@ import ProjectApprovalFlowConfig from "../pages/projects/ProjectApprovalFlowConf
 import MaterialList from "../pages/materials/MaterialList";
 import MaterialForm from "../pages/materials/MaterialForm";
 import ApprovalCenterPage from "../pages/approvals/ApprovalCenterPage";
+import ApprovalProcessPage from "../pages/approvals/ApprovalProcessPage";
 import TemplateList from "../pages/templates/TemplateList";
 import ProfileBasic from "../pages/declaration/ProfileBasic";
 import UserList from "../pages/users/UserList";
@@ -64,6 +65,7 @@ export const mainLayoutChildRoutes: RouteObject[] = [
   { path: "declaration/materials/new", element: <MaterialForm /> },
   { path: "declaration/materials/:id", element: <MaterialForm /> },
   { path: "declaration/approvals", element: <ApprovalCenterPage /> },
+  { path: "declaration/approvals/process/:materialId", element: <ApprovalProcessPage /> },
   { path: "declaration/templates", element: <TemplateList /> },
   { path: "survey", element: <SurveyHome /> },
   { path: "survey/design", element: <SurveyDesign /> },

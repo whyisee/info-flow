@@ -22,3 +22,15 @@
 .approvalCenterActionModal {
   min-width: 280px;
 }
+
+.approvalCenterFilters {
+  row-gap: 8px;
+}
+
+.approvalCenterFilterInput {
+  width: 180px;
+}
+
+.approvalCenterFilterSelect {
+  width: 220px;
+}

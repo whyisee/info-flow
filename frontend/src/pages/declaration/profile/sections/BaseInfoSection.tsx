@@ -21,6 +21,7 @@ import { useProfileImageSrc } from "../../../../hooks/useProfileImageSrc";
 import {
   getProfileFileUrlFromUploadFile,
   uploadProfileImage,
+  uploadProfilePdf,
 } from "../../../../services/profileFile";
 import {
   HIGHEST_DEGREE_LEVEL_OPTIONS,
@@ -42,7 +43,19 @@ const UNIT_ATTR_DISPLAY_OPTIONS = [
 ] as const;
 
 const selectPlaceholder = { placeholder: "请选择" };
-const noopUpload: UploadProps["beforeUpload"] = () => false;
+
+/**
+ * rc-upload：beforeUpload 返回 false 时 parsedFile 为 null，不会进入 post()，customRequest 永远不会执行。
+ * PDF 走 customRequest 时必须在校验通过后返回 true（非法类型用 LIST_IGNORE 不落列表）。
+ */
+const beforeUploadPdf: UploadProps["beforeUpload"] = (file) => {
+  const ok = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
+  if (!ok) {
+    message.error("请上传 PDF 文件");
+    return Upload.LIST_IGNORE;
+  }
+  return true;
+};
 
 /** 必须作为 Form.Item 唯一直接子节点，才能正确绑定 fileList（勿在外层再包 div） */
 function IdPhotoUpload({
@@ -100,7 +113,8 @@ function IdPhotoUpload({
           const { file, onError, onSuccess } = options;
           try {
             const res = await uploadProfileImage(file as File);
-            onSuccess?.({ url: res.url });
+            // 必须传入第二个参数 file，否则 antd 无法把 response 合并进 fileList，保存时就没有 url
+            onSuccess?.({ url: res.url }, file);
           } catch (e) {
             onError?.(e as Error);
             message.error("上传失败，请重试");
@@ -313,8 +327,25 @@ export default function BaseInfoSection({ editing }: BaseInfoSectionProps) {
               >
                 <Upload
                   className="profileUploadSameLine"
-                  beforeUpload={noopUpload}
+                  beforeUpload={beforeUploadPdf}
                   maxCount={1}
+                  accept="application/pdf,.pdf"
+                  customRequest={async (options) => {
+                    const { file, onError, onSuccess } = options;
+                    try {
+                      const f = file as File;
+                      if (!/\.pdf$/i.test(f.name)) {
+                        message.error("请上传 PDF 文件");
+                        onError?.(new Error("invalid file"));
+                        return;
+                      }
+                      const res = await uploadProfilePdf(f);
+                      onSuccess?.({ url: res.url }, file);
+                    } catch (e) {
+                      onError?.(e as Error);
+                      message.error("上传失败，请重试");
+                    }
+                  }}
                 >
                   <button type="button" className="profileUploadBtn">
                     <UploadOutlined /> 上传
@@ -339,8 +370,25 @@ export default function BaseInfoSection({ editing }: BaseInfoSectionProps) {
                 >
                   <Upload
                     className="profileUploadSameLine"
-                    beforeUpload={noopUpload}
+                    beforeUpload={beforeUploadPdf}
                     maxCount={1}
+                    accept="application/pdf,.pdf"
+                    customRequest={async (options) => {
+                      const { file, onError, onSuccess } = options;
+                      try {
+                        const f = file as File;
+                        if (!/\.pdf$/i.test(f.name)) {
+                          message.error("请上传 PDF 文件");
+                          onError?.(new Error("invalid file"));
+                          return;
+                        }
+                        const res = await uploadProfilePdf(f);
+                        onSuccess?.({ url: res.url }, file);
+                      } catch (e) {
+                        onError?.(e as Error);
+                        message.error("上传失败，请重试");
+                      }
+                    }}
                   >
                     <button type="button" className="profileUploadBtn">
                       <UploadOutlined /> 上传
@@ -396,12 +444,59 @@ export default function BaseInfoSection({ editing }: BaseInfoSectionProps) {
               </div>
               <div className="profileEduLineProof">
                 <div className="profileUploadInlineTip profileUploadSameLine">
-                  <Upload beforeUpload={noopUpload} maxCount={1}>
-                    <button type="button" className="profileUploadBtn">
-                      上传最高学历
-                    </button>
-                  </Upload>
-                  <HelpTip title="按申报要求上传学历证明材料" />
+                  <Form.Item
+                    name="highest_edu_proof_pdf"
+                    noStyle
+                    valuePropName="fileList"
+                    getValueFromEvent={(e) => e?.fileList}
+                    rules={[
+                      {
+                        validator: async (
+                          _,
+                          fileList: UploadFile[] | undefined,
+                        ) => {
+                          if (!editing) return Promise.resolve();
+                          const ok = fileList?.some(
+                            (f) =>
+                              f.status !== "removed" &&
+                              (f.originFileObj != null ||
+                                getProfileFileUrlFromUploadFile(f)),
+                          );
+                          if (!ok) {
+                            throw new Error("请上传最高学历证明材料");
+                          }
+                        },
+                      },
+                    ]}
+                  >
+                    <Upload
+                      className="profileUploadSameLine"
+                      beforeUpload={beforeUploadPdf}
+                      maxCount={1}
+                      accept="application/pdf,.pdf"
+                      customRequest={async (options) => {
+                        const { file, onError, onSuccess } = options;
+                        try {
+                          const f = file as File;
+                          if (!/\.pdf$/i.test(f.name)) {
+                            message.error("请上传 PDF 文件");
+                            onError?.(new Error("invalid file"));
+                            return;
+                          }
+                          const res = await uploadProfilePdf(f);
+                          onSuccess?.({ url: res.url }, file);
+                        } catch (e) {
+                          onError?.(e as Error);
+                          message.error("上传失败，请重试");
+                        }
+                      }}
+                    >
+                      <button type="button" className="profileUploadBtn">
+                        <UploadOutlined /> 上传最高学历
+                      </button>
+                    </Upload>
+                  </Form.Item>
+                  <HelpTip title="按申报要求上传学历证明材料（PDF）" />
                 </div>
               </div>
             </div>
@@ -452,12 +547,59 @@ export default function BaseInfoSection({ editing }: BaseInfoSectionProps) {
               </div>
               <div className="profileEduLineProof">
                 <div className="profileUploadInlineTip profileUploadSameLine">
-                  <Upload beforeUpload={noopUpload} maxCount={1}>
-                    <button type="button" className="profileUploadBtn">
-                      上传最高学位
-                    </button>
-                  </Upload>
-                  <HelpTip title="按申报要求上传学位证明材料" />
+                  <Form.Item
+                    name="highest_degree_proof_pdf"
+                    noStyle
+                    valuePropName="fileList"
+                    getValueFromEvent={(e) => e?.fileList}
+                    rules={[
+                      {
+                        validator: async (
+                          _,
+                          fileList: UploadFile[] | undefined,
+                        ) => {
+                          if (!editing) return Promise.resolve();
+                          const ok = fileList?.some(
+                            (f) =>
+                              f.status !== "removed" &&
+                              (f.originFileObj != null ||
+                                getProfileFileUrlFromUploadFile(f)),
+                          );
+                          if (!ok) {
+                            throw new Error("请上传最高学位证明材料");
+                          }
+                        },
+                      },
+                    ]}
+                  >
+                    <Upload
+                      className="profileUploadSameLine"
+                      beforeUpload={beforeUploadPdf}
+                      maxCount={1}
+                      accept="application/pdf,.pdf"
+                      customRequest={async (options) => {
+                        const { file, onError, onSuccess } = options;
+                        try {
+                          const f = file as File;
+                          if (!/\.pdf$/i.test(f.name)) {
+                            message.error("请上传 PDF 文件");
+                            onError?.(new Error("invalid file"));
+                            return;
+                          }
+                          const res = await uploadProfilePdf(f);
+                          onSuccess?.({ url: res.url }, file);
+                        } catch (e) {
+                          onError?.(e as Error);
+                          message.error("上传失败，请重试");
+                        }
+                      }}
+                    >
+                      <button type="button" className="profileUploadBtn">
+                        <UploadOutlined /> 上传最高学位
+                      </button>
+                    </Upload>
+                  </Form.Item>
+                  <HelpTip title="按申报要求上传学位证明材料（PDF）" />
                 </div>
               </div>
             </div>

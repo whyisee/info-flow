@@ -15,3 +15,6 @@ export const updateMaterial = (id: number, data: { content: Record<string, unkno
 
 export const submitMaterial = (id: number) =>
   request.post<unknown, Material>(`/materials/${id}/submit`)
+
+export const previewMaterialMergedPdf = (id: number) =>
+  request.get<unknown, Blob>(`/materials/${id}/preview-pdf`, { responseType: 'blob' })

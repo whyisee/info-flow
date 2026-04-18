@@ -15,6 +15,7 @@ import ProfileBasic from "../pages/declaration/ProfileBasic";
 import UserList from "../pages/users/UserList";
 import SurveyHome from "../pages/survey/SurveyHome";
 import SurveyDesign from "../pages/survey/SurveyDesign";
+import SurveyDesignList from "../pages/survey/SurveyDesignList";
 import SurveyFill from "../pages/survey/SurveyFill";
 import SurveyExport from "../pages/survey/SurveyExport";
 import SystemSettings from "../pages/system/SystemSettings";
@@ -68,8 +69,8 @@ export const mainLayoutChildRoutes: RouteObject[] = [
   { path: "declaration/approvals/process/:materialId", element: <ApprovalProcessPage /> },
   { path: "declaration/templates", element: <TemplateList /> },
   { path: "survey", element: <SurveyHome /> },
-  { path: "survey/design", element: <SurveyDesign /> },
-  { path: "survey/fill", element: <SurveyFill /> },
+  { path: "survey/design", element: <SurveyDesignList /> },
+  { path: "survey/design/:templateId", element: <SurveyDesign /> },
   { path: "survey/export", element: <SurveyExport /> },
   { path: "system/users", element: <UserList /> },
   {

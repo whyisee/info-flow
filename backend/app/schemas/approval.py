@@ -30,3 +30,16 @@ class ApprovalOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ApprovalQueueOut(ApprovalOut):
+    """
+    待我审批列表：展示“我的处理状态”，而非材料当前环节。
+
+    my_action_status:
+    - 0 未处理
+    - 1 通过
+    - 2 驳回（含退回）
+    """
+
+    my_action_status: int = Field(default=0)

@@ -1,0 +1,41 @@
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.palette-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 2px;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  cursor: grab;
+  transition: border-color 0.15s, background 0.15s;
+  background: #fff;
+}
+
+.palette-item:hover {
+  border-color: #1677ff;
+  background: #f0f7ff;
+}
+
+.palette-item:active {
+  cursor: grabbing;
+}
+
+.palette-item-icon {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.palette-item-label {
+  font-size: 10px;
+  color: #595959;
+  text-align: center;
+  line-height: 1.2;
+  word-break: break-all;
+}

@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Form, Space, Tag, message } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button, Form, Select, Space, Tag, message } from "antd";
 import {
   putMyModuleConfig,
-  listMyModuleConfigs,
 } from "../../../services/moduleConfig";
+import {
+  copyMyProfileVersionToDraft,
+  getMyProfileVersion,
+  listMyProfileVersions,
+  publishMyProfileVersion,
+  updateMyDraftProfileVersion,
+  type ProfileVersionOut,
+} from "../../../services/profileVersions";
 import BaseInfoSection from "./sections/BaseInfoSection";
 import TasksContactSection from "./sections/TasksContactSection";
 import SupervisorsSection from "./sections/SupervisorsSection";
@@ -11,20 +18,19 @@ import ProfileToc from "./ProfileToc";
 import {
   FORM_STATUS_KEY,
   PROFILE_MODULE,
-  mergeModulesIntoFormValues,
   normalizeLoadedProfile,
   serializeProfileForApi,
   splitProfileByModule,
   stripFormStatusFromValues,
-  type ProfileFormStatus,
 } from "./profileModuleFields";
 import "./ProfileBasicConfig.css";
 
 export default function ProfileBasicConfig() {
   const [form] = Form.useForm();
   const [editing, setEditing] = useState(false);
-  const [formStatus, setFormStatus] = useState<ProfileFormStatus>("draft");
   const baselineRef = useRef<Record<string, unknown> | null>(null);
+  const [versions, setVersions] = useState<ProfileVersionOut[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
 
   const startEdit = useCallback(() => {
     baselineRef.current = form.getFieldsValue(true);
@@ -38,26 +44,62 @@ export default function ProfileBasicConfig() {
     setEditing(false);
   }, [form]);
 
+  const loadVersion = useCallback(
+    async (versionId: number) => {
+      const row = await getMyProfileVersion(versionId);
+      const merged = (row.profile as any)?.merged;
+      const obj = merged && typeof merged === "object" ? (merged as Record<string, unknown>) : {};
+      // 版本是只读快照，不带 form_status
+      form.setFieldsValue(normalizeLoadedProfile(obj));
+    },
+    [form],
+  );
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await listMyModuleConfigs();
-        if (cancelled || !rows.length) return;
-        const merged = mergeModulesIntoFormValues(
-          rows.map((r) => ({ module: r.module, config: r.config })),
-        );
-        const { rest, status } = stripFormStatusFromValues(merged);
-        setFormStatus(status);
-        form.setFieldsValue(normalizeLoadedProfile(rest));
+        const vs = await listMyProfileVersions().catch(() => []);
+        if (cancelled) return;
+        setVersions(vs);
+
+        const latest = vs.length ? vs[0] : null;
+        if (latest) {
+          setSelectedVersionId(latest.id);
+          await loadVersion(latest.id);
+        }
       } catch {
-        /* 无记录或网络错误时保留表单 initialValues */
+        /* 网络错误时保留表单 initialValues */
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [form]);
+  }, [loadVersion]);
+
+  const versionOptions = useMemo(() => {
+    return [
+      ...versions.map((v) => ({
+        value: String(v.id),
+        label: `v${v.version}（${v.status === "published" ? "已发布" : v.status === "draft" ? "草稿" : "已归档"}）`,
+      })),
+    ];
+  }, [versions]);
+
+  const selectedVersion = useMemo(() => {
+    return versions.find((x) => x.id === selectedVersionId) || null;
+  }, [selectedVersionId, versions]);
+
+  const canEditSelected = selectedVersion?.status === "draft";
+  const canCopySelected = selectedVersion?.status === "published";
+
+  const versionStatusTag = useMemo(() => {
+    const v = versions.find((x) => x.id === selectedVersionId);
+    if (!v) return { color: "default" as const, text: "资料版本" };
+    if (v.status === "published") return { color: "success" as const, text: `v${v.version}（已发布）` };
+    if (v.status === "draft") return { color: "default" as const, text: `v${v.version}（草稿）` };
+    return { color: "default" as const, text: `v${v.version}（已归档）` };
+  }, [selectedVersionId, versions]);
 
   const persistModules = useCallback(
     async (serialized: Record<string, unknown>) => {
@@ -77,29 +119,50 @@ export default function ProfileBasicConfig() {
   /** 保存草稿：不校验必填 */
   const onSaveDraft = useCallback(async () => {
     try {
+      if (!selectedVersionId || !canEditSelected) return;
       const values = form.getFieldsValue(true) as Record<string, unknown>;
       const serialized = serializeProfileForApi({ ...values });
       serialized[FORM_STATUS_KEY] = "draft";
       await persistModules(serialized);
-      setFormStatus("draft");
+      const { rest } = stripFormStatusFromValues(serialized);
+      const byModule = splitProfileByModule(serialized);
+      await updateMyDraftProfileVersion(selectedVersionId, {
+        modules: byModule,
+        merged: rest,
+      });
       message.success("已保存草稿");
       baselineRef.current = form.getFieldsValue(true);
     } catch {
       message.error("保存失败，请稍后重试");
     }
-  }, [form, persistModules]);
+  }, [canEditSelected, form, persistModules, selectedVersionId]);
 
   /** 提交：校验全部必填项 */
   const onSubmit = useCallback(async () => {
     try {
+      if (!selectedVersionId || !canEditSelected) return;
       const values = await form.validateFields();
       const serialized = serializeProfileForApi(
         values as Record<string, unknown>,
       );
       serialized[FORM_STATUS_KEY] = "submitted";
       await persistModules(serialized);
-      setFormStatus("submitted");
-      message.success("已提交");
+      const { rest } = stripFormStatusFromValues(serialized);
+      const byModule = splitProfileByModule(serialized);
+      await updateMyDraftProfileVersion(selectedVersionId, {
+        modules: byModule,
+        merged: rest,
+      });
+      await publishMyProfileVersion(selectedVersionId);
+      // 重新拉取版本列表，保持下拉最新
+      const vs = await listMyProfileVersions().catch(() => []);
+      setVersions(vs);
+      // 提交后默认切回最新版本（通常就是刚刚提交的那条）
+      if (vs.length) {
+        setSelectedVersionId(vs[0].id);
+        await loadVersion(vs[0].id).catch(() => undefined);
+      }
+      message.success("已提交（已发布）");
       baselineRef.current = form.getFieldsValue(true);
       setEditing(false);
     } catch (e) {
@@ -109,7 +172,23 @@ export default function ProfileBasicConfig() {
         message.error("提交失败，请稍后重试");
       }
     }
-  }, [form, persistModules]);
+  }, [canEditSelected, form, loadVersion, persistModules, selectedVersionId]);
+
+  const onCopyFromPublished = useCallback(async () => {
+    try {
+      if (!selectedVersionId || !canCopySelected) return;
+      const newDraft = await copyMyProfileVersionToDraft(selectedVersionId);
+      const vs = await listMyProfileVersions().catch(() => []);
+      setVersions(vs);
+      setSelectedVersionId(newDraft.id);
+      await loadVersion(newDraft.id).catch(() => undefined);
+      baselineRef.current = form.getFieldsValue(true);
+      setEditing(true);
+      message.success("已基于当前版本创建草稿");
+    } catch {
+      message.error("创建草稿失败，请稍后重试");
+    }
+  }, [canCopySelected, form, loadVersion, selectedVersionId]);
 
   return (
     <div className="profileBasicConfig">
@@ -122,18 +201,35 @@ export default function ProfileBasicConfig() {
           <h2 className="profileSectionTitle profileSectionTitlePrimary">
             基本信息
           </h2>
-          <Tag
-            className="profileFormStatusTag"
-            color={formStatus === "submitted" ? "success" : "default"}
-          >
-            {formStatus === "submitted" ? "已提交" : "草稿"}
+          <Tag className="profileFormStatusTag" color={versionStatusTag.color}>
+            {versionStatusTag.text}
           </Tag>
         </div>
         <Space className="profileFirstSectionActions" size="middle">
+          <Select
+            size="middle"
+            value={selectedVersionId != null ? String(selectedVersionId) : undefined}
+            options={versionOptions}
+            style={{ width: 220 }}
+            onChange={async (v) => {
+              // 切换版本时强制退出编辑态
+              setEditing(false);
+              baselineRef.current = null;
+              const id = Number(v);
+              if (!Number.isFinite(id) || id <= 0) return;
+              setSelectedVersionId(id);
+              await loadVersion(id).catch(() => undefined);
+            }}
+          />
           {!editing ? (
-            <Button type="primary" onClick={startEdit}>
-              编辑
-            </Button>
+            <>
+              {canCopySelected ? (
+                <Button onClick={onCopyFromPublished}>创建复制版本</Button>
+              ) : null}
+              <Button type="primary" onClick={startEdit} disabled={!canEditSelected}>
+                编辑
+              </Button>
+            </>
           ) : (
             <>
               <Button onClick={cancelEdit}>取消</Button>
@@ -150,7 +246,7 @@ export default function ProfileBasicConfig() {
         <div className="profileBasicConfigMain">
           <Form
             form={form}
-            disabled={!editing}
+            disabled={!editing || !canEditSelected}
             layout="horizontal"
             labelAlign="right"
             colon={false}

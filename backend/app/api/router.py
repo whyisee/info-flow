@@ -9,10 +9,13 @@ from app.api import (
     declaration_config,
     materials,
     module_config,
+    profile_versions,
     profile_files,
     projects,
     rbac,
     templates,
+    survey_templates,
+    survey_public,
     users,
 )
 
@@ -21,6 +24,7 @@ api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
 api_router.include_router(users.router, prefix="/users", tags=["Users"])
 api_router.include_router(module_config.router, prefix="/users", tags=["User module config"])
 api_router.include_router(profile_files.router, tags=["Profile files"])
+api_router.include_router(profile_versions.router, tags=["Profile versions"])
 api_router.include_router(rbac.router, prefix="/rbac", tags=["RBAC"])
 api_router.include_router(data_dict.router, prefix="/system", tags=["Data dict"])
 api_router.include_router(projects.router, prefix="/projects", tags=["Projects"])
@@ -34,3 +38,5 @@ api_router.include_router(materials.router, prefix="/materials", tags=["Material
 api_router.include_router(attachments.router, prefix="/attachments", tags=["Attachments"])
 api_router.include_router(approvals.router, prefix="/approvals", tags=["Approvals"])
 api_router.include_router(templates.router, prefix="/templates", tags=["Templates"])
+api_router.include_router(survey_templates.router, prefix="/survey", tags=["Survey templates"])
+api_router.include_router(survey_public.router, prefix="/survey", tags=["Survey public"])

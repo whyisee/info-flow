@@ -84,6 +84,7 @@ export interface Material {
   project_id: number
   content: Record<string, unknown>
   status: number
+  profile_version_id?: number | null
   submitted_at?: string
   /** 申报记录创建时间（ISO） */
   created_at?: string
@@ -116,6 +117,8 @@ export interface ApprovalRecord {
   approval_step_count?: number
   /** 并行顶层时：当前用户仍须处理的子轨序号 */
   pending_parallel_lane_indexes?: number[] | null
+  /** 审批中心-待我审批：我的处理状态（0未处理/1通过/2驳回） */
+  my_action_status?: number
 }
 
 export interface LoginResponse {

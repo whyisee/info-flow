@@ -25,6 +25,8 @@ class ApplyMaterial(Base):
     )
     """提交时从项目复制的审批流，环节数/会签人以此为准，避免项目后续改配置影响在途单。"""
     approval_snapshot: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    """提交时绑定的个人资料版本（审批/预览读取该版本，避免申请人后续修改个人资料影响在途单）。"""
+    profile_version_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())

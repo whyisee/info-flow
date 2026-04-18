@@ -16,11 +16,18 @@ from app.models.project import ApplyProject
 from app.models.project_declaration_config import ProjectDeclarationConfig
 from app.models.user import User
 from app.models.user_module_config import UserModuleConfig
+from app.models.user_profile_version import UserProfileVersion
 from app.config import get_settings
 from app.schemas.material import MaterialCreate, MaterialOut, MaterialUpdate
 from app.schemas.project import parse_project_flow
 from app.services.approval_flow_display import build_flow_step_displays
 from app.services.project_effective_approval_flow import get_effective_project_flow_dict
+from app.services.profile_version_service import (
+    PROFILE_VERSION_STATUS_PUBLISHED,
+    ensure_initial_draft_version,
+    get_profile_for_material,
+    publish_draft_version,
+)
 
 router = APIRouter()
 
@@ -118,15 +125,12 @@ def preview_material_pdf(
         if (r.file_type or "").lower() == ".pdf" or (r.file_name or "").lower().endswith(".pdf")
     ]
 
-    profile_rows = (
-        db.execute(select(UserModuleConfig).where(UserModuleConfig.user_id == material.user_id))
-        .scalars()
-        .all()
+    profile_payload = get_profile_for_material(db, material)
+    profile_merged: dict = (
+        profile_payload.get("merged")
+        if isinstance(profile_payload, dict) and isinstance(profile_payload.get("merged"), dict)
+        else {}
     )
-    profile_merged: dict = {}
-    for r in profile_rows:
-        if isinstance(getattr(r, "config", None), dict):
-            profile_merged.update(r.config)
 
     decl = {}
     if isinstance(material.content, dict):
@@ -1028,6 +1032,28 @@ def submit_material(material_id: int, db: DbSession, current_user: CurrentUser):
         material.approval_snapshot = flow.model_dump()
     else:
         material.approval_snapshot = None
+
+    # 提交材料时绑定“当前已发布”的个人资料版本（若不存在则创建一个）
+    # 说明：个人资料的“提交”行为发生在资料页（draft -> published）；材料提交不应隐式生成新版本，
+    # 否则会导致“已发布版本”与用户理解不一致。
+    pv = (
+        db.execute(
+            select(UserProfileVersion)
+            .where(
+                UserProfileVersion.user_id == current_user.id,
+                UserProfileVersion.status == PROFILE_VERSION_STATUS_PUBLISHED,
+            )
+            .order_by(UserProfileVersion.version.desc())
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    if pv is None:
+        # 如果用户从未发布过资料，创建一个初始 draft 并直接发布，保证材料始终绑定可复现的快照
+        draft = ensure_initial_draft_version(db, current_user.id, created_by=current_user.id)
+        pv = publish_draft_version(db, draft.id, current_user.id, created_by=current_user.id)
+    material.profile_version_id = pv.id
 
     material.status = 1
     material.submitted_at = datetime.now(timezone.utc)

@@ -1,25 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   Button,
   Card,
+  Input,
+  type InputRef,
+  Modal,
+  Select,
   Space,
-  Table,
   Tag,
   message,
-  Popconfirm,
   Typography,
 } from "antd";
+import { EditOutlined } from "@ant-design/icons";
 import type { DeclarationConfigRecord } from "../../services/declarationConfig";
 import * as declarationConfigApi from "../../services/declarationConfig";
 import * as projectService from "../../services/projects";
 import type { Project } from "../../types";
 import {
-  EMPTY_DECLARATION_CONFIG,
-  SAMPLE_DECLARATION_CONFIG,
-} from "./declarationConfigSample";
-import { DeclarationConfigEditModal } from "./DeclarationConfigEditModal";
+  DeclarationConfigRenderer,
+  normalizeDeclarationConfig,
+} from "../../features/declaration-config-render";
 import { DeclarationConfigCopyModal } from "./DeclarationConfigCopyModal";
+import {
+  DeclarationConfigEditorPanel,
+  type DeclarationConfigEditorPanelRef,
+} from "./DeclarationConfigEditorPanel";
 import "./ProjectDeclarationConfig.css";
 
 const statusLabel: Record<string, { color: string; text: string }> = {
@@ -35,13 +41,15 @@ export default function ProjectDeclarationConfig() {
   const [project, setProject] = useState<Project | null>(null);
   const [rows, setRows] = useState<DeclarationConfigRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<DeclarationConfigRecord | null>(
-    null,
-  );
   const [copyOpen, setCopyOpen] = useState(false);
-  /** 每次打开编辑递增，保证弹窗内 useLayoutEffect 一定重新灌入表单（避免 config 未变时跳过） */
-  const [editorHydrateKey, setEditorHydrateKey] = useState(0);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [labelEditing, setLabelEditing] = useState(false);
+  const [panelKey, setPanelKey] = useState(0);
+  const editorRef = useRef<DeclarationConfigEditorPanelRef | null>(null);
+  const [labelDraft, setLabelDraft] = useState("");
+  const labelInputRef = useRef<InputRef | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const loadAll = useCallback(async () => {
     if (!Number.isFinite(projectId) || projectId < 1) return;
@@ -53,6 +61,11 @@ export default function ProjectDeclarationConfig() {
       ]);
       setProject(p);
       setRows(list);
+      const latest = list.length ? list[0] : null;
+      setSelectedId((prev) => {
+        if (prev != null && list.some((x) => x.id === prev)) return prev;
+        return latest ? latest.id : null;
+      });
     } catch {
       message.error("加载失败");
     } finally {
@@ -64,44 +77,22 @@ export default function ProjectDeclarationConfig() {
     loadAll();
   }, [loadAll]);
 
-  const openEdit = async (record: DeclarationConfigRecord) => {
-    if (record.status !== "draft") {
-      message.warning("仅草稿可编辑");
-      return;
-    }
-    setLoading(true);
-    try {
-      const fresh = await declarationConfigApi.getDeclarationConfig(
-        projectId,
-        record.id,
-      );
-      setEditingRecord(fresh);
-      setEditorHydrateKey((k) => k + 1);
-      setEditorOpen(true);
-    } catch {
-      message.error("加载配置失败");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const selectedRecord = useMemo(() => {
+    if (!selectedId) return null;
+    return rows.find((r) => r.id === selectedId) || null;
+  }, [rows, selectedId]);
 
-  const createVersion = async (useSample: boolean) => {
-    setLoading(true);
-    try {
-      await declarationConfigApi.createDeclarationConfig(projectId, {
-        label: useSample ? "示例骨架" : undefined,
-        config: useSample ? SAMPLE_DECLARATION_CONFIG : EMPTY_DECLARATION_CONFIG,
-      });
-      message.success("已新建版本");
-      loadAll();
-    } catch {
-      message.error("新建失败");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const canEditSelected = selectedRecord?.status === "draft";
+  const canCopySelected = selectedRecord?.status === "published";
 
-  const copyCreateVersion = async (args: { sourceId: number; label?: string }) => {
+  useEffect(() => {
+    setLabelDraft(selectedRecord?.label ?? "");
+  }, [selectedRecord?.id, selectedRecord?.label]);
+
+  const copyCreateVersion = async (args: {
+    sourceId: number;
+    label?: string;
+  }) => {
     const source = rows.find((r) => r.id === args.sourceId);
     if (!source) {
       message.error("源版本不存在或已刷新");
@@ -128,15 +119,70 @@ export default function ProjectDeclarationConfig() {
     }
   };
 
-  const publish = async (record: DeclarationConfigRecord) => {
+  const quickCopyFromSelected = async () => {
+    if (!selectedRecord || !canCopySelected) return;
+    setLoading(true);
     try {
-      await declarationConfigApi.publishDeclarationConfig(projectId, record.id);
-      message.success("已发布");
-      loadAll();
+      const config = JSON.parse(
+        JSON.stringify(selectedRecord.config ?? {}),
+      ) as Record<string, unknown>;
+      const created = await declarationConfigApi.createDeclarationConfig(
+        projectId,
+        {
+          label: `复制自 v${selectedRecord.version}`,
+          config,
+        },
+      );
+      message.success("已复制新建版本");
+      await loadAll();
+      setSelectedId(created.id);
+      setEditing(true);
+      setPanelKey((k) => k + 1);
     } catch {
-      message.error("发布失败");
+      message.error("复制新建失败");
+    } finally {
+      setLoading(false);
     }
   };
+
+  const startEdit = () => {
+    if (!canEditSelected) return;
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setLabelEditing(false);
+    setLabelDraft(selectedRecord?.label ?? "");
+    setPanelKey((k) => k + 1);
+  };
+
+  const onSave = async () => {
+    try {
+      await editorRef.current?.save(labelDraft);
+    } finally {
+      // do nothing
+    }
+  };
+
+  const onPublish = async () => {
+    try {
+      await editorRef.current?.publish();
+      setEditing(false);
+      setPanelKey((k) => k + 1);
+      await loadAll();
+    } finally {
+      // do nothing
+    }
+  };
+
+  const previewConfig = useMemo(() => {
+    if (!selectedRecord) return null;
+    const cfg =
+      editorRef.current?.getPreviewConfig?.() ??
+      ((selectedRecord.config ?? {}) as Record<string, unknown>);
+    return normalizeDeclarationConfig(cfg);
+  }, [selectedRecord, panelKey, editing, labelDraft]);
 
   if (!Number.isFinite(projectId) || projectId < 1) {
     return (
@@ -154,79 +200,164 @@ export default function ProjectDeclarationConfig() {
             申报配置
             {project ? ` — ${project.name}` : ""}
           </h2>
+          {selectedRecord ? (
+            <Tag
+              color={
+                (statusLabel[selectedRecord.status] ?? { color: "default" })
+                  .color
+              }
+            >
+              {
+                (
+                  statusLabel[selectedRecord.status] ?? {
+                    text: selectedRecord.status,
+                  }
+                ).text
+              }
+              {` v${selectedRecord.version}`}
+            </Tag>
+          ) : null}
+          {selectedRecord ? (
+            <Space size={6} wrap>
+              {/* <Typography.Text type="secondary"></Typography.Text> */}
+              {!labelEditing ? (
+                <>
+                  <Typography.Text ellipsis style={{ maxWidth: 320 }}>
+                    {labelDraft?.trim()
+                      ? labelDraft
+                      : selectedRecord.label?.trim()
+                        ? selectedRecord.label
+                        : "—"}
+                  </Typography.Text>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      if (!canEditSelected) return;
+                      if (!editing) startEdit();
+                      setLabelEditing(true);
+                      setTimeout(() => labelInputRef.current?.focus(), 0);
+                    }}
+                    disabled={!canEditSelected}
+                    aria-label="编辑版本说明"
+                  />
+                </>
+              ) : (
+                <Input
+                  ref={labelInputRef}
+                  size="small"
+                  value={labelDraft}
+                  onChange={(e) => setLabelDraft(e.target.value)}
+                  onPressEnter={() => {
+                    setLabelEditing(false);
+                  }}
+                  onBlur={() => {
+                    setLabelEditing(false);
+                  }}
+                  placeholder="可选：例如“2026 春季申报”"
+                  maxLength={200}
+                  style={{ width: 360 }}
+                />
+              )}
+            </Space>
+          ) : null}
         </div>
         <Space className="projectDeclarationPageActions" size="middle" wrap>
-          <Button onClick={() => createVersion(false)} loading={loading}>
-            新建空版本
-          </Button>
-          <Button type="primary" onClick={() => createVersion(true)} loading={loading}>
-            新建示例版本
-          </Button>
-          <Button onClick={() => setCopyOpen(true)} loading={loading} disabled={!rows.length}>
-            复制新建
-          </Button>
+          <Select
+            value={selectedId != null ? String(selectedId) : undefined}
+            style={{ width: 260 }}
+            placeholder="选择版本"
+            options={rows.map((r) => ({
+              value: String(r.id),
+              label: `v${r.version}（${statusLabel[r.status]?.text ?? r.status}）${r.label ? `：${r.label}` : ""}`,
+            }))}
+            onChange={async (v) => {
+              const id = Number(v);
+              if (!Number.isFinite(id) || id <= 0) return;
+              setEditing(false);
+              setPanelKey((k) => k + 1);
+              setSelectedId(id);
+              // 读取 fresh，避免列表里 config 不是最新
+              try {
+                setLoading(true);
+                const fresh = await declarationConfigApi.getDeclarationConfig(
+                  projectId,
+                  id,
+                );
+                setRows((prev) => prev.map((x) => (x.id === id ? fresh : x)));
+              } catch {
+                message.error("加载配置失败");
+              } finally {
+                setLoading(false);
+              }
+            }}
+          />
+          {!editing ? (
+            <>
+              <Button
+                onClick={() => setPreviewOpen(true)}
+                disabled={!selectedRecord}
+              >
+                预览
+              </Button>
+              <Button
+                onClick={quickCopyFromSelected}
+                disabled={!canCopySelected}
+                loading={loading}
+              >
+                复制新建
+              </Button>
+              <Button
+                type="primary"
+                onClick={startEdit}
+                disabled={!canEditSelected}
+              >
+                编辑
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={cancelEdit}>取消</Button>
+              <Button
+                onClick={() => setPreviewOpen(true)}
+                disabled={!selectedRecord}
+              >
+                预览
+              </Button>
+              <Button onClick={() => void onSave()} loading={loading}>
+                保存
+              </Button>
+              <Button
+                type="primary"
+                onClick={() => void onPublish()}
+                loading={loading}
+              >
+                提交
+              </Button>
+            </>
+          )}
         </Space>
       </div>
 
-      <Table<DeclarationConfigRecord>
-        loading={loading}
-        rowKey="id"
-        dataSource={rows}
-        pagination={false}
-        columns={[
-          { title: "版本", dataIndex: "version", width: 80 },
-          { title: "说明", dataIndex: "label", ellipsis: true },
-          {
-            title: "状态",
-            dataIndex: "status",
-            width: 100,
-            render: (s: string) => {
-              const m = statusLabel[s] ?? { color: "default", text: s };
-              return <Tag color={m.color}>{m.text}</Tag>;
-            },
-          },
-          {
-            title: "更新时间",
-            dataIndex: "updated_at",
-            width: 200,
-            render: (v: string | null | undefined, r) => v ?? r.created_at,
-          },
-          {
-            title: "操作",
-            key: "action",
-            width: 240,
-            render: (_: unknown, record) => (
-              <Space wrap size="small">
-                <Button type="link" size="small" onClick={() => openEdit(record)}>
-                  编辑配置
-                </Button>
-                {record.status === "draft" && (
-                  <Popconfirm
-                    title="发布后教师端将拉取此版本，原已发布版本将归档。确定？"
-                    onConfirm={() => publish(record)}
-                  >
-                    <Button type="link" size="small">
-                      发布
-                    </Button>
-                  </Popconfirm>
-                )}
-              </Space>
-            ),
-          },
-        ]}
-      />
-
-      <DeclarationConfigEditModal
-        projectId={projectId}
-        open={editorOpen}
-        hydrateKey={editorHydrateKey}
-        record={editingRecord}
-        onClose={() => {
-          setEditorOpen(false);
-          setEditingRecord(null);
-        }}
-        onSaved={loadAll}
-      />
+      {selectedRecord ? (
+        <DeclarationConfigEditorPanel
+          key={panelKey}
+          ref={editorRef}
+          projectId={projectId}
+          record={selectedRecord}
+          editing={editing}
+          label={labelDraft}
+          onSaved={() => void loadAll()}
+          onPublished={() => void loadAll()}
+        />
+      ) : (
+        <Card>
+          <Typography.Text type="secondary">
+            暂无版本，请先新建一个版本。
+          </Typography.Text>
+        </Card>
+      )}
 
       <DeclarationConfigCopyModal
         open={copyOpen}
@@ -235,6 +366,26 @@ export default function ProjectDeclarationConfig() {
         onCancel={() => setCopyOpen(false)}
         onOk={(args) => void copyCreateVersion(args)}
       />
+
+      <Modal
+        title={
+          selectedRecord
+            ? `申报配置预览 — v${selectedRecord.version}`
+            : "申报配置预览"
+        }
+        open={previewOpen}
+        onCancel={() => setPreviewOpen(false)}
+        footer={null}
+        width={960}
+        destroyOnClose
+        centered
+      >
+        {previewConfig ? (
+          <DeclarationConfigRenderer config={previewConfig} />
+        ) : (
+          <Typography.Text type="secondary">暂无可预览的配置</Typography.Text>
+        )}
+      </Modal>
     </div>
   );
 }

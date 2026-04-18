@@ -4,6 +4,10 @@ import request from './request'
 export const getPendingApprovals = () =>
   request.get<unknown, ApprovalRecord[]>('/approvals/pending')
 
+/** 审批中心-待我审批：含我的处理状态（0未处理/1通过/2驳回） */
+export const getMyApprovalQueue = () =>
+  request.get<unknown, ApprovalRecord[]>('/approvals/queue')
+
 export const approve = (materialId: number, comment?: string, lane_index?: number | null) =>
   request.post<unknown, ApprovalRecord>(`/approvals/${materialId}/approve`, {
     comment,

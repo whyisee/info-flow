@@ -30,18 +30,33 @@ export type ToolbarForm = {
   sort: boolean;
 };
 
-export type SubModuleForm = {
+export type SubModuleSectionForm = {
   key: string;
   title: string;
-  type: "map" | "list";
+  kind: "map" | "list" | "form_ref";
   order: number;
-  helpText: string;
+  // map
   sentenceTemplate: string;
   fields: MapFieldForm[];
   attachments: AttachmentForm[];
+  // list
   maxRows: number | null;
   toolbar: ToolbarForm;
   columns: ListColumnForm[];
+  // form (designer)
+  templateId?: number | null;
+  templateVersion?: number | null;
+  // 兼容旧自由表单配置：仍可被 normalize 进来，但编辑端不再生成
+  formSchemaJson: string;
+  formFieldsJson: string;
+};
+
+export type SubModuleForm = {
+  key: string;
+  title: string;
+  order: number;
+  helpText: string;
+  sections: SubModuleSectionForm[];
 };
 
 export type ModuleForm = {
@@ -97,12 +112,35 @@ function normalizeColumn(raw: unknown, i: number): ListColumnForm {
   };
 }
 
-function normalizeSubModule(raw: unknown, i: number, j: number): SubModuleForm {
+function normalizeSection(
+  raw: unknown,
+  i: number,
+  j: number,
+  k: number,
+): SubModuleSectionForm {
   const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const type = o.type === "list" ? "list" : "map";
-  const fields = Array.isArray(o.fields) ? o.fields.map(normalizeMapField) : [];
-  const attachments = Array.isArray(o.attachments) ? o.attachments.map(normalizeAttachment) : [];
-  const columns = Array.isArray(o.columns) ? o.columns.map(normalizeColumn) : [];
+  const kind =
+    o.kind === "list"
+      ? "list"
+      : o.kind === "form_ref"
+        ? "form_ref"
+        : "map";
+
+  const rawFields = o.fields;
+  const fields = Array.isArray(rawFields)
+    ? (rawFields as unknown[]).map(normalizeMapField)
+    : [];
+
+  const rawAttachments = o.attachments;
+  const attachments = Array.isArray(rawAttachments)
+    ? (rawAttachments as unknown[]).map(normalizeAttachment)
+    : [];
+
+  const rawColumns = o.columns;
+  const columns = Array.isArray(rawColumns)
+    ? (rawColumns as unknown[]).map(normalizeColumn)
+    : [];
+
   const tb = o.toolbar && typeof o.toolbar === "object" ? (o.toolbar as Record<string, unknown>) : {};
   const toolbar: ToolbarForm = {
     add: tb.add !== false,
@@ -110,19 +148,125 @@ function normalizeSubModule(raw: unknown, i: number, j: number): SubModuleForm {
     remove: tb.remove !== false,
     sort: tb.sort !== false,
   };
+
   const maxRows = o.maxRows;
   return {
-    key: typeof o.key === "string" ? o.key : `sub_${i}_${j}`,
+    key: typeof o.key === "string" ? o.key : `sec_${i}_${j}_${k}`,
     title: typeof o.title === "string" ? o.title : "",
-    type,
-    order: typeof o.order === "number" ? o.order : j,
-    helpText: typeof o.helpText === "string" ? o.helpText : "",
+    kind,
+    order: typeof o.order === "number" ? o.order : k,
     sentenceTemplate: typeof o.sentenceTemplate === "string" ? o.sentenceTemplate : "",
     fields,
     attachments,
     maxRows: typeof maxRows === "number" ? maxRows : null,
     toolbar,
     columns,
+    templateId:
+      typeof o.templateId === "number"
+        ? o.templateId
+        : typeof o.templateId === "string"
+          ? Number(o.templateId)
+          : typeof o.template_id === "number"
+            ? (o.template_id as number)
+            : null,
+    templateVersion:
+      typeof o.templateVersion === "number"
+        ? o.templateVersion
+        : typeof o.templateVersion === "string"
+          ? Number(o.templateVersion)
+          : typeof o.template_version === "number"
+            ? (o.template_version as number)
+            : null,
+    formSchemaJson: (() => {
+      try {
+        return typeof o.schema === "string"
+          ? o.schema
+          : o.schema != null
+            ? JSON.stringify(o.schema, null, 2)
+            : "";
+      } catch {
+        return "";
+      }
+    })(),
+    formFieldsJson: (() => {
+      try {
+        // 注意：map 的 fields 是数组。这里只用于兼容旧 kind=form 的 fields（对象）
+        const rawFieldsForForm = (o as any).fields;
+        return typeof rawFieldsForForm === "string"
+          ? rawFieldsForForm
+          : rawFieldsForForm != null && !Array.isArray(rawFieldsForForm)
+            ? JSON.stringify(rawFieldsForForm, null, 2)
+            : "";
+      } catch {
+        return "";
+      }
+    })(),
+  };
+}
+
+function normalizeSubModule(raw: unknown, i: number, j: number): SubModuleForm {
+  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  // v3：sections
+  const rawSections = Array.isArray(o.sections) ? (o.sections as unknown[]) : null;
+  let sections: SubModuleSectionForm[] = [];
+  if (rawSections && rawSections.length) {
+    sections = rawSections.map((s, k) => normalizeSection(s, i, j, k));
+  } else {
+    // v2：map/list（最多各一个） -> sections（map 再 list）
+    const mapPart =
+      o.map && typeof o.map === "object" && !Array.isArray(o.map)
+        ? (o.map as Record<string, unknown>)
+        : null;
+    const listPart =
+      o.list && typeof o.list === "object" && !Array.isArray(o.list)
+        ? (o.list as Record<string, unknown>)
+        : null;
+    if (mapPart) {
+      sections.push(
+        normalizeSection({ key: "map_0", kind: "map", order: 0, ...mapPart }, i, j, 0),
+      );
+    }
+    if (listPart) {
+      sections.push(
+        normalizeSection(
+          { key: "list_0", kind: "list", order: sections.length, ...listPart },
+          i,
+          j,
+          sections.length,
+        ),
+      );
+    }
+    // v1：type + 平铺字段
+    if (!sections.length) {
+      const kind = o.type === "list" ? "list" : "map";
+      sections = [
+        normalizeSection(
+          {
+            key: "__default",
+            kind,
+            order: 0,
+            sentenceTemplate: o.sentenceTemplate,
+            fields: o.fields,
+            attachments: o.attachments,
+            maxRows: o.maxRows,
+            toolbar: o.toolbar,
+            columns: o.columns,
+          },
+          i,
+          j,
+          0,
+        ),
+      ];
+    }
+  }
+
+  return {
+    key: typeof o.key === "string" ? o.key : `sub_${i}_${j}`,
+    title: typeof o.title === "string" ? o.title : "",
+    order: typeof o.order === "number" ? o.order : j,
+    helpText: typeof o.helpText === "string" ? o.helpText : "",
+    sections,
   };
 }
 
@@ -178,29 +322,53 @@ function columnToApi(c: ListColumnForm, mi: number, sj: number, ci: number): Rec
   return o;
 }
 
+function sectionToApi(
+  sec: SubModuleSectionForm,
+  mi: number,
+  sj: number,
+  k: number,
+): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    key: sec.key.trim() || `sec_${mi}_${sj}_${k}`,
+    title: sec.title.trim(),
+    kind: sec.kind,
+    order: k,
+  };
+  if (sec.kind === "map") {
+    base.sentenceTemplate = sec.sentenceTemplate.trim();
+    base.fields = (sec.fields ?? [])
+      .map((f, fi) => mapFieldToApi(f, mi, sj, fi))
+      .filter((x) => (x.name as string).length);
+    base.attachments = (sec.attachments ?? [])
+      .map((a, ai) => attachmentToApi(a, mi, sj, ai))
+      .filter((x) => (x.key as string).length);
+  } else if (sec.kind === "list") {
+    base.maxRows = sec.maxRows != null && sec.maxRows > 0 ? sec.maxRows : 10;
+    base.toolbar = { ...newDefaultToolbar(), ...sec.toolbar };
+    base.columns = (sec.columns ?? [])
+      .map((c, ci) => columnToApi(c, mi, sj, ci))
+      .filter((x) => (x.name as string).length);
+  } else {
+    // form_ref
+    base.templateId = sec.templateId ?? null;
+    base.templateVersion = sec.templateVersion ?? null;
+  }
+  return base;
+}
+
 function subModuleToApi(s: SubModuleForm, mi: number, sj: number): Record<string, unknown> {
   const base: Record<string, unknown> = {
     key: s.key.trim() || `sub_${mi}_${sj}`,
     title: s.title.trim(),
-    type: s.type,
     order: sj,
     helpText: s.helpText.trim(),
   };
-  if (s.type === "map") {
-    base.sentenceTemplate = s.sentenceTemplate.trim();
-    base.fields = (s.fields ?? [])
-      .map((f, fi) => mapFieldToApi(f, mi, sj, fi))
-      .filter((x) => (x.name as string).length);
-    base.attachments = (s.attachments ?? [])
-      .map((a, ai) => attachmentToApi(a, mi, sj, ai))
-      .filter((x) => (x.key as string).length);
-  } else {
-    base.maxRows = s.maxRows != null && s.maxRows > 0 ? s.maxRows : 10;
-    base.toolbar = { ...newDefaultToolbar(), ...s.toolbar };
-    base.columns = (s.columns ?? [])
-      .map((c, ci) => columnToApi(c, mi, sj, ci))
-      .filter((x) => (x.name as string).length);
-  }
+  const sections = (s.sections ?? [])
+    .map((sec, k) => sectionToApi(sec, mi, sj, k))
+    .filter((x) => typeof x.key === "string" && (x.key as string).length > 0);
+  base.sections = sections;
+  // 兼容字段：type 取第一个 section.kind（便于旧逻辑粗略识别）
+  base.type = sections[0]?.kind === "list" ? "list" : "map";
   return base;
 }
 

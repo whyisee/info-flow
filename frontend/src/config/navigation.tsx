@@ -132,14 +132,8 @@ const SIDE_MENUS: Record<TopMenuKey, SideMenuEntry[]> = {
           permissions: ["survey:design:manage"],
         },
         {
-          path: "/survey/fill",
-          label: "问卷填写",
-          icon: <FileDoneOutlined />,
-          permissions: ["survey:fill:use"],
-        },
-        {
           path: "/survey/export",
-          label: "数据导出",
+          label: "问卷数据",
           icon: <DownloadOutlined />,
           permissions: ["survey:data:export"],
         },

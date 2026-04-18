@@ -194,7 +194,7 @@ function PendingApprovalsPanel() {
     setLoading(true);
     try {
       const [data, mats, projs, us] = await Promise.all([
-        approvalService.getPendingApprovals(),
+        approvalService.getMyApprovalQueue(),
         materialService.getMaterials(),
         projectService.getProjects(),
         userService.listUsers({ user_status: "active" }).catch(() => []),
@@ -223,7 +223,7 @@ function PendingApprovalsPanel() {
     const midNum = mid && /^\d+$/.test(mid) ? Number(mid) : null;
     return records.filter((r) => {
       if (midNum != null && r.material_id !== midNum) return false;
-      if (qStatus != null && r.status !== qStatus) return false;
+      if (qStatus != null && (r.my_action_status ?? 0) !== qStatus) return false;
       if (qProjectId != null) {
         const m = materialById.get(r.material_id);
         if (!m || m.project_id !== qProjectId) return false;
@@ -256,17 +256,14 @@ function PendingApprovalsPanel() {
           />
           <Select
             allowClear
-            placeholder="状态"
+            placeholder="我的处理状态"
             className="approvalCenterFilterSelect"
             value={qStatus ?? undefined}
             onChange={(v) => setQStatus(v == null ? null : Number(v))}
             options={[
-              { value: 0, label: "草稿" },
-              { value: 5, label: "已驳回" },
-              { value: 1, label: "第 1 环节" },
-              { value: 2, label: "第 2 环节" },
-              { value: 3, label: "第 3 环节" },
-              { value: 4, label: "已通过(3环节)" },
+              { value: 0, label: "未处理" },
+              { value: 1, label: "通过" },
+              { value: 2, label: "驳回" },
             ]}
           />
           <Button icon={<ReloadOutlined />} onClick={fetchPending} loading={loading}>
@@ -315,20 +312,13 @@ function PendingApprovalsPanel() {
             },
           },
           {
-            title: "当前环节",
-            dataIndex: "status",
-            key: "status",
-            render: (s: number, record: ApprovalRecord) => {
-              const n = record.approval_step_count ?? 3;
-              const label = materialStatusLabel(s, n);
-              const color =
-                s === 0
-                  ? "default"
-                  : s === 5
-                    ? "red"
-                    : s === n + 1
-                      ? "green"
-                      : STATUS_COLORS[s] ?? "processing";
+            title: "我的处理状态",
+            key: "my_action_status",
+            width: 140,
+            render: (_: unknown, record: ApprovalRecord) => {
+              const s = record.my_action_status ?? 0;
+              const label = s === 1 ? "通过" : s === 2 ? "驳回" : "未处理";
+              const color = s === 1 ? "green" : s === 2 ? "red" : "default";
               return <Tag color={color}>{label}</Tag>;
             },
           },

@@ -19,6 +19,9 @@ export function resolveTabLabel(pathname: string, state: unknown): string {
     if (name) return name;
     return dictCode;
   }
+  // 问卷设计页：用传入的 tabLabel（模板名）
+  const tabLabel = (state as { tabLabel?: string } | null)?.tabLabel?.trim();
+  if (tabLabel) return tabLabel;
   return getTabLabel(pathname);
 }
 
@@ -32,7 +35,7 @@ const PATH_LABELS: Record<string, string> = {
   "/survey": "问卷概览",
   "/survey/design": "问卷设计",
   "/survey/fill": "问卷填写",
-  "/survey/export": "数据导出",
+  "/survey/export": "问卷数据",
   "/system/users": "用户管理",
   "/system/permissions/catalog": "权限目录",
   "/system/permissions/roles": "角色授权",
@@ -79,6 +82,9 @@ export function getMenuSelectedKey(pathname: string): string {
   }
   if (pathname.startsWith("/declaration/projects")) {
     return "/declaration/projects";
+  }
+  if (pathname.startsWith("/survey/design")) {
+    return "/survey";
   }
   if (pathname.startsWith("/system/permissions/roles")) {
     return "/system/permissions/roles";

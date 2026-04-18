@@ -8,6 +8,7 @@ import {
   InputNumber,
   Select,
   Space,
+  Spin,
   Table,
   Tabs,
   Tag,
@@ -19,14 +20,30 @@ import { UploadOutlined } from "@ant-design/icons";
 import { normalizeDeclarationConfig } from "./normalize";
 import type { DeclarationDraftShape } from "./declarationDraftShape";
 import {
+  DEFAULT_SECTION_KEY,
+  type DeclarationAttachmentRef,
   emptyDeclarationDraft,
   getListRows,
+  getMapAttachmentFiles,
   getMapFields,
+  getFormRefValues,
+  getFormValues,
   normalizeDeclarationDraft,
   setListRows as setDraftListRows,
+  setMapAttachmentFiles,
   setMapField,
+  setFormRefValues,
+  setFormValue,
 } from "./declarationDraftShape";
 import "./DeclarationConfigRenderer.css";
+import {
+  attachmentDownloadUrl,
+  deleteAttachment,
+  uploadAttachment,
+} from "../../services/attachments";
+import type { Expr, FieldDef, FormNode } from "../form-designer/types";
+import { getPublicVersion } from "../../services/surveyResponses";
+import { SurveyPreview } from "../../pages/survey/SurveyPreview";
 
 export type DeclarationConfigRendererProps = {
   /** 与后端存储一致的 config（含 modules） */
@@ -44,6 +61,8 @@ export type DeclarationConfigRendererProps = {
   draft?: DeclarationDraftShape | Record<string, unknown>;
   /** 草稿更新回调 */
   onDraftChange?: (next: DeclarationDraftShape) => void;
+  /** 申报材料 id（用于附件上传）。无 id 时禁用上传。 */
+  materialId?: number;
   /**
    * 在 tabs 布局下插在最前的标签（如申报页「基本信息」）；stack 布局下显示在模块卡片之前。
    */
@@ -52,6 +71,7 @@ export type DeclarationConfigRendererProps = {
 
 type RawModule = Record<string, unknown>;
 type RawSubModule = Record<string, unknown>;
+type RawSection = Record<string, unknown>;
 
 function sortByOrder<T extends { order?: unknown }>(arr: T[]): T[] {
   return [...arr].sort((a, b) => {
@@ -59,6 +79,53 @@ function sortByOrder<T extends { order?: unknown }>(arr: T[]): T[] {
     const bo = typeof b.order === "number" ? b.order : 0;
     return ao - bo;
   });
+}
+
+function pickSubTitleAndHelp(sub: RawSubModule): { title: string; helpText: string } {
+  return {
+    title: typeof sub.title === "string" ? sub.title : "",
+    helpText: typeof sub.helpText === "string" ? sub.helpText : "",
+  };
+}
+
+function normalizeSubSections(sub: RawSubModule): RawSection[] {
+  // v3：sections 数组（可重复 map/list）
+  const sectionsRaw = sub.sections;
+  if (Array.isArray(sectionsRaw)) {
+    const list = sectionsRaw.filter((x) => x && typeof x === "object" && !Array.isArray(x)) as RawSection[];
+    return sortByOrder(list);
+  }
+
+  // v2：sub.map / sub.list（最多各一个），保持 map -> list 的顺序
+  const sections: RawSection[] = [];
+  if (sub.map && typeof sub.map === "object" && !Array.isArray(sub.map)) {
+    sections.push({
+      key: "map_0",
+      kind: "map",
+      order: 0,
+      ...(sub.map as Record<string, unknown>),
+    });
+  }
+  if (sub.list && typeof sub.list === "object" && !Array.isArray(sub.list)) {
+    sections.push({
+      key: "list_0",
+      kind: "list",
+      order: sections.length,
+      ...(sub.list as Record<string, unknown>),
+    });
+  }
+  if (sections.length > 0) return sections;
+
+  // v1：type + 平铺字段
+  const kind = sub.type === "list" ? "list" : "map";
+  return [
+    {
+      key: DEFAULT_SECTION_KEY,
+      kind,
+      order: 0,
+      ...sub,
+    },
+  ];
 }
 
 function parseSelectOptions(raw: Record<string, unknown>): { label: string; value: string }[] {
@@ -80,6 +147,385 @@ function parseSelectOptions(raw: Record<string, unknown>): { label: string; valu
   });
 }
 
+function evalExpr(expr: Expr | undefined, values: Record<string, unknown>): boolean {
+  if (!expr) return true;
+  if (expr.op === "and") return expr.items.every((x) => evalExpr(x, values));
+  if (expr.op === "or") return expr.items.some((x) => evalExpr(x, values));
+  if (expr.op === "not") return !evalExpr(expr.item, values);
+  const leftVal = values[expr.left.var];
+  if (expr.op === "eq") return leftVal === expr.right;
+  if (expr.op === "ne") return leftVal !== expr.right;
+  if (expr.op === "in") return Array.isArray(expr.right) && expr.right.includes(leftVal as any);
+  return true;
+}
+
+function safeFormSchema(raw: unknown): { schema: FormNode | null; fields: Record<string, FieldDef> } {
+  const o = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const schema = o.schema && typeof o.schema === "object" ? (o.schema as FormNode) : null;
+  const fields =
+    o.fields && typeof o.fields === "object" && !Array.isArray(o.fields)
+      ? (o.fields as Record<string, FieldDef>)
+      : {};
+  return { schema, fields };
+}
+
+function FormFieldControl({
+  def,
+  interactive,
+  value,
+  onChange,
+  materialId,
+}: {
+  def: FieldDef;
+  interactive: boolean;
+  value: unknown;
+  onChange: (v: unknown) => void;
+  materialId?: number;
+}) {
+  const required =
+    def.rules?.required === true ||
+    (def.rules?.requiredWhen ? evalExpr(def.rules.requiredWhen, {}) : false);
+
+  if (def.type === "textarea") {
+    return (
+      <Input.TextArea
+        rows={2}
+        disabled={!interactive}
+        value={typeof value === "string" ? value : ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={interactive ? "请输入" : "（填报时填写）"}
+      />
+    );
+  }
+  if (def.type === "number") {
+    return (
+      <InputNumber
+        style={{ width: "100%" }}
+        disabled={!interactive}
+        value={typeof value === "number" ? value : undefined}
+        onChange={(v) => onChange(v ?? null)}
+        placeholder={interactive ? "请输入数字" : "（数字）"}
+      />
+    );
+  }
+  if (def.type === "select") {
+    const opts = def.options ?? [];
+    return (
+      <Select
+        style={{ width: "100%" }}
+        disabled={!interactive}
+        allowClear={interactive}
+        placeholder={interactive ? "请选择" : "（下拉选择）"}
+        value={typeof value === "string" ? value : undefined}
+        onChange={(v) => onChange(v)}
+        options={opts}
+      />
+    );
+  }
+  if (def.type === "date") {
+    return (
+      <Input
+        type="date"
+        disabled={!interactive}
+        value={typeof value === "string" ? value : ""}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+  if (def.type === "switch") {
+    return (
+      <Select
+        style={{ width: "100%" }}
+        disabled={!interactive}
+        allowClear={interactive}
+        placeholder="是/否"
+        value={value as string | undefined}
+        onChange={onChange}
+        options={[
+          { label: "是", value: "yes" },
+          { label: "否", value: "no" },
+        ]}
+      />
+    );
+  }
+  if (def.type === "attachment") {
+    const list = Array.isArray(value) ? (value as DeclarationAttachmentRef[]) : [];
+    const cfg = def.attachment ?? {};
+    return (
+      <Space direction="vertical" size={4} style={{ width: "100%" }}>
+        {cfg.templateUrl ? (
+          <a href={cfg.templateUrl} target="_blank" rel="noreferrer">
+            模板下载
+          </a>
+        ) : null}
+        <Upload
+          maxCount={cfg.maxCount ?? 1}
+          fileList={list.map((x) => ({
+            uid: String(x.id),
+            name: x.file_name,
+            status: "done" as const,
+            url: attachmentDownloadUrl(x.id),
+          }))}
+          showUploadList={{ showDownloadIcon: true, showRemoveIcon: interactive }}
+          beforeUpload={(file) => {
+            if (!materialId) {
+              message.warning("请先保存为草稿后再上传附件");
+              return Upload.LIST_IGNORE;
+            }
+            const accept = cfg.accept ?? "";
+            const maxSize = cfg.maxSize ?? null;
+            const ext = (file.name.split(".").pop() || "").toLowerCase();
+            if (
+              accept &&
+              !accept
+                .split(",")
+                .map((x) => x.trim().replace(/^\./, ""))
+                .includes(ext)
+            ) {
+              message.error(`文件类型不符合要求：${accept}`);
+              return Upload.LIST_IGNORE;
+            }
+            if (maxSize != null && maxSize > 0 && file.size > maxSize) {
+              message.error(`文件过大，最大允许 ${Math.round(maxSize / 1024)} KB`);
+              return Upload.LIST_IGNORE;
+            }
+            return true;
+          }}
+          customRequest={async (options) => {
+            try {
+              const f = options.file as File;
+              if (!materialId) throw new Error("no materialId");
+              const created = await uploadAttachment(materialId, f);
+              const next: DeclarationAttachmentRef[] = [
+                ...list,
+                {
+                  id: created.id,
+                  file_name: created.file_name,
+                  file_size: created.file_size,
+                  file_type: created.file_type,
+                  created_at: created.created_at,
+                },
+              ];
+              onChange(next);
+              options.onSuccess?.(created, f);
+            } catch (e) {
+              options.onError?.(e as Error);
+              message.error("上传失败");
+            }
+          }}
+          onRemove={async (file) => {
+            try {
+              const id = Number(file.uid);
+              if (!Number.isFinite(id) || id <= 0) return false;
+              await deleteAttachment(id);
+              onChange(list.filter((x) => x.id !== id));
+              return true;
+            } catch {
+              message.error("删除失败");
+              return false;
+            }
+          }}
+          disabled={!interactive}
+        >
+          {interactive ? (
+            <Button size="small" icon={<UploadOutlined />}>
+              选择文件
+            </Button>
+          ) : null}
+        </Upload>
+        {interactive && required && list.length === 0 ? (
+          <Typography.Text type="danger" style={{ fontSize: 12 }}>
+            请上传必填附件
+          </Typography.Text>
+        ) : null}
+      </Space>
+    );
+  }
+
+  return (
+    <Input
+      disabled={!interactive}
+      value={value != null && typeof value !== "object" ? String(value) : ""}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={interactive ? "请输入" : "（填报时填写）"}
+    />
+  );
+}
+
+function FormNodeRenderer({
+  node,
+  fields,
+  values,
+  interactive,
+  onValueChange,
+  materialId,
+}: {
+  node: FormNode;
+  fields: Record<string, FieldDef>;
+  values: Record<string, unknown>;
+  interactive: boolean;
+  onValueChange: (name: string, v: unknown) => void;
+  materialId?: number;
+}) {
+  if (node.kind === "Text") {
+    return <Typography.Text type="secondary">{node.text}</Typography.Text>;
+  }
+  if (node.kind === "Divider") {
+    return <div className="declCfgRenderFormDivider" />;
+  }
+  if (node.kind === "Group") {
+    return (
+      <Card size="small" className="declCfgRenderFormGroup" title={node.title || undefined}>
+        <Space direction="vertical" size={8} style={{ width: "100%" }}>
+          {node.children.map((c) => (
+            <FormNodeRenderer
+              key={c.id}
+              node={c}
+              fields={fields}
+              values={values}
+              interactive={interactive}
+              onValueChange={onValueChange}
+              materialId={materialId}
+            />
+          ))}
+        </Space>
+      </Card>
+    );
+  }
+  if (node.kind === "Row") {
+    return (
+      <div className="declCfgRenderFormRow">
+        {node.children.map((c) => (
+          <div key={c.id} className="declCfgRenderFormRowCol">
+            <FormNodeRenderer
+              node={c}
+              fields={fields}
+              values={values}
+              interactive={interactive}
+              onValueChange={onValueChange}
+              materialId={materialId}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (node.kind === "Col") {
+    return (
+      <div style={{ width: "100%" }}>
+        <Space direction="vertical" size={8} style={{ width: "100%" }}>
+          {node.children.map((c) => (
+            <FormNodeRenderer
+              key={c.id}
+              node={c}
+              fields={fields}
+              values={values}
+              interactive={interactive}
+              onValueChange={onValueChange}
+              materialId={materialId}
+            />
+          ))}
+        </Space>
+      </div>
+    );
+  }
+  if (node.kind === "Repeater") {
+    const arr = Array.isArray(values[node.name]) ? (values[node.name] as Record<string, unknown>[]) : [];
+    const canAdd = interactive && (node.max == null || arr.length < node.max);
+    return (
+      <div className="declCfgRenderFormRepeater">
+        <Typography.Text strong style={{ fontSize: 12 }}>
+          {node.name}
+        </Typography.Text>
+        <Space direction="vertical" size={8} style={{ width: "100%", marginTop: 6 }}>
+          {(interactive ? (arr.length ? arr : [{}]) : arr).map((item, idx) => (
+            <Card key={idx} size="small" className="declCfgRenderFormRepeaterItem" title={`第 ${idx + 1} 条`}>
+              <FormNodeRenderer
+                node={node.itemSchema}
+                fields={fields}
+                values={item ?? {}}
+                interactive={interactive}
+                onValueChange={(childName, v) => {
+                  const base = arr.length ? [...arr] : [{}];
+                  base[idx] = { ...(base[idx] ?? {}), [childName]: v };
+                  onValueChange(node.name, base);
+                }}
+                materialId={materialId}
+              />
+            </Card>
+          ))}
+          {canAdd ? (
+            <Button size="small" type="dashed" onClick={() => onValueChange(node.name, [...arr, {}])}>
+              添加一条
+            </Button>
+          ) : null}
+        </Space>
+      </div>
+    );
+  }
+  if (node.kind === "Field") {
+    const def = fields[node.name];
+    if (!def) {
+      return (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          （未定义字段：{node.name}）
+        </Typography.Text>
+      );
+    }
+    const visible = evalExpr(def.rules?.showWhen, values);
+    if (!visible) return null;
+    const v = values[def.name];
+    return (
+      <div className="declCfgRenderFieldRow">
+        <Typography.Text style={{ fontSize: 12 }}>{def.label}</Typography.Text>
+        <FormFieldControl
+          def={def}
+          interactive={interactive}
+          value={v}
+          onChange={(nv) => onValueChange(def.name, nv)}
+          materialId={materialId}
+        />
+      </div>
+    );
+  }
+  return null;
+}
+
+function SubModuleFormContent({
+  sec,
+  interactive,
+  moduleKey,
+  subKey,
+  sectionKey,
+  materialId,
+  draft,
+  onDraftChange,
+}: {
+  sec: RawSection;
+  interactive: boolean;
+  moduleKey: string;
+  subKey: string;
+  sectionKey: string;
+  materialId?: number;
+  draft: DeclarationDraftShape;
+  onDraftChange: (next: DeclarationDraftShape) => void;
+}) {
+  const { schema, fields } = safeFormSchema(sec);
+  const values = interactive ? getFormValues(draft, moduleKey, subKey, sectionKey) : {};
+  if (!schema) {
+    return <Typography.Text type="secondary">（未配置表单 schema）</Typography.Text>;
+  }
+  return (
+    <FormNodeRenderer
+      node={schema}
+      fields={fields}
+      values={values}
+      interactive={interactive}
+      onValueChange={(name, v) => onDraftChange(setFormValue(draft, moduleKey, subKey, sectionKey, name, v))}
+      materialId={materialId}
+    />
+  );
+}
 function MapField({
   label,
   widget,
@@ -254,42 +700,49 @@ function ListCellFill({
   );
 }
 
-function SubModuleMapBlock({
-  sub,
+function SubModuleMapContent({
+  subMap,
   interactive,
   rowKeyPrefix,
   moduleKey,
   subKey,
+  sectionKey,
+  materialId,
   draft,
   onDraftChange,
 }: {
-  sub: RawSubModule;
+  subMap: RawSubModule;
   interactive: boolean;
   rowKeyPrefix: string;
   moduleKey: string;
   subKey: string;
+  sectionKey: string;
+  materialId?: number;
   draft: DeclarationDraftShape;
   onDraftChange: (next: DeclarationDraftShape) => void;
 }) {
-  const title = typeof sub.title === "string" ? sub.title : "";
-  const helpText = typeof sub.helpText === "string" ? sub.helpText : "";
   const sentenceTemplate =
-    typeof sub.sentenceTemplate === "string" ? sub.sentenceTemplate.trim() : "";
-  const fields = Array.isArray(sub.fields) ? sub.fields : [];
-  const attachments = Array.isArray(sub.attachments) ? sub.attachments : [];
-  const mapValues = interactive ? getMapFields(draft, moduleKey, subKey) : {};
+    typeof subMap.sentenceTemplate === "string"
+      ? subMap.sentenceTemplate.trim()
+      : "";
+  const fields = Array.isArray(subMap.fields) ? subMap.fields : [];
+  const attachments = Array.isArray(subMap.attachments)
+    ? subMap.attachments
+    : [];
+  const mapValues = interactive ? getMapFields(draft, moduleKey, subKey, sectionKey) : {};
 
   const patchMapField = useCallback(
     (fieldName: string, v: unknown) => {
-      onDraftChange(setMapField(draft, moduleKey, subKey, fieldName, v));
+      onDraftChange(setMapField(draft, moduleKey, subKey, sectionKey, fieldName, v));
     },
-    [draft, moduleKey, subKey, onDraftChange],
+    [draft, moduleKey, subKey, sectionKey, onDraftChange],
   );
 
   return (
-    <Card size="small" className="declCfgRenderSubCard" title={title || "子模块"}>
-      {helpText ? <span className="declCfgRenderHelp">{helpText}</span> : null}
-      {sentenceTemplate ? <div className="declCfgRenderTemplate">{sentenceTemplate}</div> : null}
+    <>
+      {sentenceTemplate ? (
+        <div className="declCfgRenderTemplate">{sentenceTemplate}</div>
+      ) : null}
       {fields.map((f, i) => {
         const o = f && typeof f === "object" ? (f as Record<string, unknown>) : {};
         const name = typeof o.name === "string" ? o.name : `field_${i}`;
@@ -320,6 +773,10 @@ function SubModuleMapBlock({
               const req = o.required === true;
               const accept = typeof o.accept === "string" ? o.accept : "";
               const maxSize = typeof o.maxSize === "number" ? o.maxSize : null;
+              const templateUrl = typeof o.templateUrl === "string" ? o.templateUrl.trim() : "";
+              const uploaded = interactive
+                ? getMapAttachmentFiles(draft, moduleKey, subKey, sectionKey, key)
+                : [];
               return (
                 <li key={key + j}>
                   <Space size={4} wrap align="start">
@@ -327,13 +784,109 @@ function SubModuleMapBlock({
                     {req ? <Tag>必填</Tag> : <Tag>选填</Tag>}
                     {accept ? <Tag color="blue">{accept}</Tag> : null}
                     {maxSize != null ? <Tag>最大 {Math.round(maxSize / 1024)} KB</Tag> : null}
+                    {templateUrl ? (
+                      <a href={templateUrl} target="_blank" rel="noreferrer">
+                        模板下载
+                      </a>
+                    ) : null}
                     {interactive ? (
                       <Upload
                         maxCount={1}
-                        showUploadList
-                        beforeUpload={() => {
-                          message.info("附件上传需对接存储服务后生效，当前可先填写其他项");
-                          return false;
+                        fileList={uploaded.map((x) => ({
+                          uid: String(x.id),
+                          name: x.file_name,
+                          status: "done" as const,
+                          url: attachmentDownloadUrl(x.id),
+                        }))}
+                        showUploadList={{ showDownloadIcon: true, showRemoveIcon: true }}
+                        beforeUpload={(file) => {
+                          if (!materialId) {
+                            message.warning("请先保存为草稿后再上传附件");
+                            return Upload.LIST_IGNORE;
+                          }
+                          const ext = (file.name.split(".").pop() || "").toLowerCase();
+                          if (
+                            accept &&
+                            !accept
+                              .split(",")
+                              .map((x) => x.trim().replace(/^\./, ""))
+                              .includes(ext)
+                          ) {
+                            message.error(`文件类型不符合要求：${accept}`);
+                            return Upload.LIST_IGNORE;
+                          }
+                          if (maxSize != null && maxSize > 0 && file.size > maxSize) {
+                            message.error(`文件过大，最大允许 ${Math.round(maxSize / 1024)} KB`);
+                            return Upload.LIST_IGNORE;
+                          }
+                          return true;
+                        }}
+                        customRequest={async (options) => {
+                          try {
+                            const f = options.file as File;
+                            if (!materialId) throw new Error("no materialId");
+                            const created = await uploadAttachment(materialId, f);
+                            const current = getMapAttachmentFiles(
+                              draft,
+                              moduleKey,
+                              subKey,
+                              sectionKey,
+                              key,
+                            );
+                            const next: DeclarationAttachmentRef[] = [
+                              ...current,
+                              {
+                                id: created.id,
+                                file_name: created.file_name,
+                                file_size: created.file_size,
+                                file_type: created.file_type,
+                                created_at: created.created_at,
+                              },
+                            ];
+                            onDraftChange(
+                              setMapAttachmentFiles(
+                                draft,
+                                moduleKey,
+                                subKey,
+                                sectionKey,
+                                key,
+                                next,
+                              ),
+                            );
+                            options.onSuccess?.(created, f);
+                          } catch (e) {
+                            options.onError?.(e as Error);
+                            message.error("上传失败");
+                          }
+                        }}
+                        onRemove={async (file) => {
+                          try {
+                            const id = Number(file.uid);
+                            if (!Number.isFinite(id) || id <= 0) return false;
+                            await deleteAttachment(id);
+                            const current = getMapAttachmentFiles(
+                              draft,
+                              moduleKey,
+                              subKey,
+                              sectionKey,
+                              key,
+                            );
+                            const next = current.filter((x) => x.id !== id);
+                            onDraftChange(
+                              setMapAttachmentFiles(
+                                draft,
+                                moduleKey,
+                                subKey,
+                                sectionKey,
+                                key,
+                                next,
+                              ),
+                            );
+                            return true;
+                          } catch {
+                            message.error("删除失败");
+                            return false;
+                          }
                         }}
                       >
                         <Button size="small" icon={<UploadOutlined />}>
@@ -342,37 +895,45 @@ function SubModuleMapBlock({
                       </Upload>
                     ) : null}
                   </Space>
+                  {interactive && req && uploaded.length === 0 ? (
+                    <Typography.Text type="danger" style={{ fontSize: 12, display: "block" }}>
+                      请上传必填附件
+                    </Typography.Text>
+                  ) : null}
                 </li>
               );
             })}
           </ul>
         </>
       ) : null}
-    </Card>
+    </>
   );
 }
 
-function SubModuleListBlock({
-  sub,
+function SubModuleListContent({
+  subList,
   interactive,
   moduleKey,
   subKey,
+  sectionKey,
   draft,
   onDraftChange,
 }: {
-  sub: RawSubModule;
+  subList: RawSubModule;
   interactive: boolean;
   moduleKey: string;
   subKey: string;
+  sectionKey: string;
   draft: DeclarationDraftShape;
   onDraftChange: (next: DeclarationDraftShape) => void;
 }) {
-  const title = typeof sub.title === "string" ? sub.title : "";
-  const helpText = typeof sub.helpText === "string" ? sub.helpText : "";
-  const columnsRaw = Array.isArray(sub.columns) ? sub.columns : [];
+  const columnsRaw = Array.isArray(subList.columns) ? subList.columns : [];
   const maxRows =
-    typeof sub.maxRows === "number" && sub.maxRows > 0 ? sub.maxRows : 10;
-  const tb = sub.toolbar && typeof sub.toolbar === "object" ? (sub.toolbar as Record<string, unknown>) : {};
+    typeof subList.maxRows === "number" && subList.maxRows > 0 ? subList.maxRows : 10;
+  const tb =
+    subList.toolbar && typeof subList.toolbar === "object"
+      ? (subList.toolbar as Record<string, unknown>)
+      : {};
   const toolbarBits: string[] = [];
   if (tb.add !== false) toolbarBits.push("添加");
   if (tb.edit !== false) toolbarBits.push("编辑");
@@ -404,34 +965,36 @@ function SubModuleListBlock({
     };
   });
 
-  const storedRows = interactive ? getListRows(draft, moduleKey, subKey) : null;
+  const storedRows = interactive ? getListRows(draft, moduleKey, subKey, sectionKey) : null;
   const listRows =
     interactive && storedRows && storedRows.length > 0 ? storedRows : interactive ? [{}] : [];
 
   const updateCell = useCallback(
     (rowIndex: number, colName: string, v: unknown) => {
-      const base = getListRows(draft, moduleKey, subKey);
+      const base = getListRows(draft, moduleKey, subKey, sectionKey);
       const nextBase = base && base.length > 0 ? [...base] : [{}];
       nextBase[rowIndex] = { ...nextBase[rowIndex], [colName]: v };
-      onDraftChange(setDraftListRows(draft, moduleKey, subKey, nextBase));
+      onDraftChange(setDraftListRows(draft, moduleKey, subKey, sectionKey, nextBase));
     },
-    [draft, moduleKey, subKey, onDraftChange],
+    [draft, moduleKey, subKey, sectionKey, onDraftChange],
   );
 
   const addListRow = useCallback(() => {
-    const base = getListRows(draft, moduleKey, subKey);
+    const base = getListRows(draft, moduleKey, subKey, sectionKey);
     const current = base && base.length > 0 ? base : [{}];
     if (current.length >= maxRows) return;
-    onDraftChange(setDraftListRows(draft, moduleKey, subKey, [...current, {}]));
-  }, [draft, moduleKey, subKey, maxRows, onDraftChange]);
+    onDraftChange(setDraftListRows(draft, moduleKey, subKey, sectionKey, [...current, {}]));
+  }, [draft, moduleKey, subKey, sectionKey, maxRows, onDraftChange]);
 
   const removeListRow = useCallback(
     (idx: number) => {
-      const base = getListRows(draft, moduleKey, subKey) ?? [{}];
+      const base = getListRows(draft, moduleKey, subKey, sectionKey) ?? [{}];
       if (base.length <= 1) return;
-      onDraftChange(setDraftListRows(draft, moduleKey, subKey, base.filter((_, i) => i !== idx)));
+      onDraftChange(
+        setDraftListRows(draft, moduleKey, subKey, sectionKey, base.filter((_, i) => i !== idx)),
+      );
     },
-    [draft, moduleKey, subKey, onDraftChange],
+    [draft, moduleKey, subKey, sectionKey, onDraftChange],
   );
 
   const dataSourceReadonly: Record<string, unknown>[] = [];
@@ -470,8 +1033,7 @@ function SubModuleListBlock({
   });
 
   return (
-    <Card size="small" className="declCfgRenderSubCard" title={title || "子模块（列表）"}>
-      {helpText ? <span className="declCfgRenderHelp">{helpText}</span> : null}
+    <>
       <Descriptions size="small" column={1} style={{ marginBottom: 8 }}>
         <Descriptions.Item label="最大行数">{maxRows}</Descriptions.Item>
         <Descriptions.Item label="工具栏">{toolbarBits.join(" / ") || "—"}</Descriptions.Item>
@@ -527,6 +1089,95 @@ function SubModuleListBlock({
               : [{ title: "（无列定义）", key: "empty", render: () => null }]
         }
       />
+    </>
+  );
+}
+
+function FormRefSection({
+  sec,
+  interactive,
+  moduleKey,
+  subKey,
+  sectionKey,
+  draft,
+  onDraftChange,
+}: {
+  sec: RawSection;
+  interactive: boolean;
+  moduleKey: string;
+  subKey: string;
+  sectionKey: string;
+  draft: DeclarationDraftShape;
+  onDraftChange: (next: DeclarationDraftShape) => void;
+}) {
+  const templateId = (sec as any).templateId ?? (sec as any).template_id ?? null;
+  const templateVersion = (sec as any).templateVersion ?? (sec as any).template_version ?? null;
+
+  const [loading, setLoading] = useState(false);
+  const [schema, setSchema] = useState<Record<string, unknown> | null>(null);
+  const [fields, setFields] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!templateId) return;
+    const ver = templateVersion && typeof templateVersion === "number" ? templateVersion : 1;
+    setLoading(true);
+    setError(null);
+    getPublicVersion(templateId, ver)
+      .then((v) => {
+        setSchema(v.schema as Record<string, unknown>);
+        setFields(v.fields as Record<string, unknown>);
+      })
+      .catch(() => setError("问卷加载失败"))
+      .finally(() => setLoading(false));
+  }, [templateId, templateVersion]);
+
+  const values = getFormRefValues(draft, moduleKey, subKey, sectionKey);
+
+  const handleChange = useCallback(
+    (nextValues: Record<string, unknown>) => {
+      onDraftChange(setFormRefValues(draft, moduleKey, subKey, sectionKey, nextValues));
+    },
+    [draft, moduleKey, subKey, sectionKey, onDraftChange],
+  );
+
+  if (!templateId) {
+    return (
+      <Card size="small" style={{ background: "#fafafa", borderStyle: "dashed" }}>
+        <Typography.Text type="secondary">未配置问卷模板（templateId 为空）</Typography.Text>
+      </Card>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Card size="small" style={{ background: "#fafafa", borderStyle: "dashed" }}>
+        <div style={{ textAlign: "center", padding: 24 }}>
+          <Spin tip="加载问卷中…" />
+        </div>
+      </Card>
+    );
+  }
+
+  if (error || !schema) {
+    return (
+      <Card size="small" style={{ background: "#fafafa", borderStyle: "dashed" }}>
+        <Typography.Text type="danger">{error ?? "问卷不存在"}</Typography.Text>
+      </Card>
+    );
+  }
+
+  return (
+    <Card size="small" style={{ background: "#fafafa", borderStyle: "dashed" }}>
+      <SurveyPreview
+        schemaJson={JSON.stringify(schema)}
+        fieldsJson={JSON.stringify(fields)}
+        readOnly={!interactive}
+        onSubmit={interactive ? handleChange : undefined}
+        templateId={templateId as number}
+        version={templateVersion as number}
+        showIndex={false}
+      />
     </Card>
   );
 }
@@ -537,6 +1188,7 @@ function SubModuleBlock({
   interactive,
   rowKeyPrefix,
   moduleKey,
+  materialId,
   draft,
   onDraftChange,
 }: {
@@ -545,33 +1197,101 @@ function SubModuleBlock({
   interactive: boolean;
   rowKeyPrefix: string;
   moduleKey: string;
+  materialId?: number;
   draft: DeclarationDraftShape;
   onDraftChange: (next: DeclarationDraftShape) => void;
 }) {
   const subKey = typeof sub.key === "string" ? sub.key : `sub_${si}`;
-  const type = sub.type === "list" ? "list" : "map";
-  if (type === "map") {
-    return (
-      <SubModuleMapBlock
-        sub={sub}
-        interactive={interactive}
-        rowKeyPrefix={rowKeyPrefix}
-        moduleKey={moduleKey}
-        subKey={subKey}
-        draft={draft}
-        onDraftChange={onDraftChange}
-      />
-    );
-  }
+  const { title, helpText } = pickSubTitleAndHelp(sub);
+  const sections = normalizeSubSections(sub);
+
   return (
-    <SubModuleListBlock
-      sub={sub}
-      interactive={interactive}
-      moduleKey={moduleKey}
-      subKey={subKey}
-      draft={draft}
-      onDraftChange={onDraftChange}
-    />
+    <Card
+      size="small"
+      className="declCfgRenderSubCard"
+      title={
+        <div className="declCfgRenderSubHeaderTitle">
+          <span className="declCfgRenderSubHeaderTitleMain">
+            {title || "子模块"}
+          </span>
+          {helpText ? (
+            <span className="declCfgRenderSubHeaderHelp" title={helpText}>
+              {helpText}
+            </span>
+          ) : null}
+        </div>
+      }
+    >
+      {sections.map((sec, idx) => {
+        const sectionKey =
+          typeof sec.key === "string" && sec.key.trim()
+            ? sec.key.trim()
+            : `sec_${idx}`;
+        const kind =
+          sec.kind === "list"
+            ? "list"
+            : sec.kind === "form"
+              ? "form"
+              : sec.kind === "form_ref"
+                ? "form_ref"
+                : "map";
+        const secTitle = typeof sec.title === "string" ? sec.title.trim() : "";
+        return (
+          <div key={sectionKey}>
+            {secTitle ? (
+              <Typography.Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 6 }}>
+                {secTitle}
+              </Typography.Text>
+            ) : null}
+            {kind === "map" ? (
+              <SubModuleMapContent
+                subMap={sec}
+                interactive={interactive}
+                rowKeyPrefix={`${rowKeyPrefix}-${sectionKey}`}
+                moduleKey={moduleKey}
+                subKey={subKey}
+                sectionKey={sectionKey}
+                materialId={materialId}
+                draft={draft}
+                onDraftChange={onDraftChange}
+              />
+            ) : kind === "list" ? (
+              <SubModuleListContent
+                subList={sec}
+                interactive={interactive}
+                moduleKey={moduleKey}
+                subKey={subKey}
+                sectionKey={sectionKey}
+                draft={draft}
+                onDraftChange={onDraftChange}
+              />
+            ) : kind === "form_ref" ? (
+              <FormRefSection
+                sec={sec}
+                interactive={interactive}
+                moduleKey={moduleKey}
+                subKey={subKey}
+                sectionKey={sectionKey}
+                draft={draft}
+                onDraftChange={onDraftChange}
+              />
+            ) : (
+              <SubModuleFormContent
+                sec={sec}
+                interactive={interactive}
+                moduleKey={moduleKey}
+                subKey={subKey}
+                sectionKey={sectionKey}
+                materialId={materialId}
+                draft={draft}
+                onDraftChange={onDraftChange}
+              />
+            )}
+            {idx < sections.length - 1 ? <div style={{ height: 12 }} /> : null}
+          </div>
+        );
+      })}
+    </Card>
   );
 }
 
@@ -579,12 +1299,14 @@ function ModuleSectionContent({
   mod,
   mi,
   interactive,
+  materialId,
   draft,
   onDraftChange,
 }: {
   mod: RawModule;
   mi: number;
   interactive: boolean;
+  materialId?: number;
   draft: DeclarationDraftShape;
   onDraftChange: (next: DeclarationDraftShape) => void;
 }) {
@@ -606,6 +1328,7 @@ function ModuleSectionContent({
           interactive={interactive}
           rowKeyPrefix={`${key}-${si}`}
           moduleKey={key}
+          materialId={materialId}
           draft={draft}
           onDraftChange={onDraftChange}
         />
@@ -625,6 +1348,7 @@ export function DeclarationConfigRenderer({
   draft: draftProp,
   onDraftChange,
   leadingTab,
+  materialId,
 }: DeclarationConfigRendererProps) {
   const interactive = variant === "fill";
   const [internalDraft, setInternalDraft] = useState<DeclarationDraftShape>(() =>
@@ -680,6 +1404,7 @@ export function DeclarationConfigRenderer({
                 mod={mod}
                 mi={mi}
                 interactive={interactive}
+                materialId={materialId}
                 draft={draft}
                 onDraftChange={commitDraft}
               />
@@ -776,6 +1501,7 @@ export function DeclarationConfigRenderer({
               mod={mod}
               mi={mi}
               interactive={interactive}
+              materialId={materialId}
               draft={draft}
               onDraftChange={commitDraft}
             />

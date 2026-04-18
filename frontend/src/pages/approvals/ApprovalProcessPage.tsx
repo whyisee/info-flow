@@ -32,6 +32,7 @@ import { DeclarationConfigRenderer, normalizeDeclarationDraft } from "../../feat
 import "../../features/declaration-config-render/DeclarationConfigRenderer.css";
 import { listUserModuleConfigs, type UserModuleConfigDTO } from "../../services/moduleConfig";
 import { mergeModulesIntoFormValues } from "../declaration/profile/profileModuleFields";
+import { getUserProfileVersionForApprover } from "../../services/profileVersions";
 import { NATIONALITY_OPTIONS } from "../../data/nationalityOptions";
 import { HIGHEST_DEGREE_LEVEL_OPTIONS, HIGHEST_EDUCATION_LEVEL_OPTIONS } from "../../data/educationDegreeOptions";
 import { useDictFlatItems } from "../../hooks/useDictFlatItems";
@@ -347,20 +348,53 @@ export default function ApprovalProcessPage() {
     }
     let cancelled = false;
     setProfileLoading(true);
-    listUserModuleConfigs(material.user_id)
-      .then((rows) => {
-        if (!cancelled) setProfileRows(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setProfileRows([]);
-      })
-      .finally(() => {
-        if (!cancelled) setProfileLoading(false);
-      });
+    // 优先使用提交时绑定的个人资料版本（保证审批看到一致信息）；无版本则 fallback 到实时 module-configs
+    const pvid = material.profile_version_id;
+    if (pvid) {
+      getUserProfileVersionForApprover(material.user_id, Number(pvid))
+        .then((row) => {
+          if (cancelled) return;
+          const merged = (row.profile as any)?.merged;
+          if (merged && typeof merged === "object") {
+            // 兼容现有 mergeModulesIntoFormValues：把合并后的扁平对象放在 BASIC 模块里即可
+            const fake: UserModuleConfigDTO = {
+              id: 0,
+              user_id: material.user_id,
+              module: "declaration_basic",
+              config: merged as Record<string, unknown>,
+              status: "active",
+              created_at: row.created_at,
+              updated_at: row.updated_at,
+            };
+            setProfileRows([fake]);
+            return;
+          }
+          return listUserModuleConfigs(material.user_id).then((rows) => {
+            if (!cancelled) setProfileRows(rows);
+          });
+        })
+        .catch(() => {
+          if (!cancelled) setProfileRows([]);
+        })
+        .finally(() => {
+          if (!cancelled) setProfileLoading(false);
+        });
+    } else {
+      listUserModuleConfigs(material.user_id)
+        .then((rows) => {
+          if (!cancelled) setProfileRows(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setProfileRows([]);
+        })
+        .finally(() => {
+          if (!cancelled) setProfileLoading(false);
+        });
+    }
     return () => {
       cancelled = true;
     };
-  }, [material?.user_id]);
+  }, [material?.id, material?.profile_version_id, material?.user_id]);
 
   const openPdfPreview = useCallback(async () => {
     if (!material) return;

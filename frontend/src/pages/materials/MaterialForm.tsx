@@ -10,6 +10,8 @@ import {
   DeclarationConfigRenderer,
   emptyDeclarationDraft,
   normalizeDeclarationDraft,
+  validateDeclarationDraftAttachments,
+  validateDeclarationDraftForm,
   type DeclarationDraftShape,
   type DeclarationConfigRendererProps,
 } from "../../features/declaration-config-render";
@@ -28,12 +30,14 @@ function MaterialDeclarationBridge({
   config,
   leadingTab,
   variant,
+  materialId,
 }: {
   value?: unknown;
   onChange?: (v: DeclarationDraftShape) => void;
   config: Record<string, unknown>;
   leadingTab: DeclarationConfigRendererProps["leadingTab"];
   variant?: "preview" | "fill";
+  materialId?: number;
 }) {
   return (
     <DeclarationConfigRenderer
@@ -43,6 +47,7 @@ function MaterialDeclarationBridge({
       draft={normalizeDeclarationDraft(value)}
       onDraftChange={onChange}
       leadingTab={leadingTab}
+      materialId={materialId}
     />
   );
 }
@@ -145,6 +150,27 @@ export default function MaterialForm() {
     const values = await form.validateFields();
     const { declaration } = values as { declaration?: Record<string, unknown> };
     const content = { declaration: declaration ?? {} };
+
+    const cfg =
+      activeDecl?.config && typeof activeDecl.config === "object"
+        ? activeDecl.config
+        : { modules: [] };
+    const v = validateDeclarationDraftAttachments({
+      config: cfg as Record<string, unknown>,
+      draft: declaration ?? {},
+    });
+    if (!v.ok) {
+      message.error(v.errors[0]?.message ?? "请补齐必填附件");
+      return;
+    }
+    const vf = validateDeclarationDraftForm({
+      config: cfg as Record<string, unknown>,
+      draft: declaration ?? {},
+    });
+    if (!vf.ok) {
+      message.error(vf.errors[0]?.message ?? "请补齐必填项");
+      return;
+    }
     setLoading(true);
     try {
       await materialService.updateMaterial(Number(id), { content });
@@ -238,6 +264,7 @@ export default function MaterialForm() {
                         : { modules: [] }
                     }
                     leadingTab={basicInfoTab}
+                    materialId={material?.id}
                   />
                 </Form.Item>
               ) : null}

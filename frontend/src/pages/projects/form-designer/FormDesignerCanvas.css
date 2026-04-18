@@ -1,0 +1,113 @@
+.fdCanvas {
+  min-height: 480px;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fafbfc;
+}
+
+.fdNode {
+  border: 1.5px solid #e4e9f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background: #ffffff;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.fdNode:hover {
+  border-color: #b3c4e8;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.06);
+}
+
+.fdNodeSelected {
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.18), 0 4px 16px rgba(22, 119, 255, 0.1);
+}
+
+.fdNodeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fdNodeLabel {
+  font-size: 13px;
+  color: #3b4d6b;
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fdNodeDelete {
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.fdNode:hover .fdNodeDelete {
+  opacity: 1;
+}
+
+/* drop line */
+.fdDropLine {
+  height: 6px;
+  margin: 2px 0;
+  border-radius: 3px;
+  transition: height 0.1s, background 0.1s;
+}
+
+.fdDropLineActive {
+  height: 20px;
+  background: rgba(22, 119, 255, 0.15);
+  border: 1.5px dashed #1677ff;
+}
+
+.fdChildren {
+  padding-left: 14px;
+  border-left: 2px solid #e4e9f0;
+  margin-top: 8px;
+  border-radius: 0 0 6px 6px;
+  transition: background 0.1s;
+}
+
+.fdChildrenOver {
+  background: rgba(22, 119, 255, 0.04);
+  border-left-color: #1677ff;
+}
+
+.fdRowChildren {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-left: none;
+  padding-left: 0;
+  border-radius: 6px;
+  padding: 8px;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 10px,
+    rgba(0, 0, 0, 0.01) 10px,
+    rgba(0, 0, 0, 0.01) 20px
+  );
+}
+
+.fdRepeaterChildren {
+  background: rgba(250, 84, 28, 0.02);
+  border-left-color: #ffd4b8;
+}
+
+.fdRepeaterLabel {
+  margin-bottom: 6px;
+}
+
+.fdTextPreview {
+  padding: 6px 8px;
+  background: #fafafa;
+  border-radius: 4px;
+  border: 1px solid #f0f0f0;
+  margin-top: 4px;
+}

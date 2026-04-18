@@ -6,3 +6,6 @@ export {
   emptyDeclarationDraft,
   normalizeDeclarationDraft,
 } from "./declarationDraftShape";
+export type { DeclarationAttachmentRef } from "./declarationDraftShape";
+export { validateDeclarationDraftAttachments } from "./validateDeclarationDraft";
+export { validateDeclarationDraftForm } from "./validateDeclarationDraft";

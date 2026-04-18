@@ -21,6 +21,7 @@ class MaterialOut(BaseModel):
     project_id: int
     content: dict[str, Any]
     status: int
+    profile_version_id: Optional[int] = None
     submitted_at: Optional[datetime] = None
     created_at: datetime
     approval_snapshot: Optional[dict[str, Any]] = None

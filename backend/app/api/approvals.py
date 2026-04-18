@@ -14,7 +14,7 @@ from app.models.approval import ApproveRecord
 from app.models.material import ApplyMaterial
 from app.models.project import ApplyProject
 from app.models.user import User
-from app.schemas.approval import ApprovalAction, ApprovalOut
+from app.schemas.approval import ApprovalAction, ApprovalOut, ApprovalQueueOut
 from app.schemas.project import ApprovalStepParallel, parse_project_flow
 from app.services import approval_flow_service as afs
 from app.services.approval_assignee_resolution import resolve_lane_assignees
@@ -155,6 +155,96 @@ def list_pending(
             )
         )
     return records
+
+
+@router.get("/queue", response_model=list[ApprovalQueueOut])
+def list_my_queue(
+    db: DbSession,
+    active_role: ActiveRoleCode,
+    current_user: User = Depends(require_any_permission("declaration:approval:process")),
+):
+    """
+    审批中心-待我审批：按“我的处理状态”展示与筛选。
+
+    - 未处理：仍需我处理当前环节（含并行子轨仍待办）
+    - 通过/驳回：我已对该材料做过处理（取我最新一条审批记录）
+    """
+    role = get_effective_legacy_role(db, current_user, active_role)
+    legacy_expected = ROLE_APPROVE_STATUS.get(role, (None, None))[0]
+
+    materials = db.execute(
+        select(ApplyMaterial).where(
+            ApplyMaterial.status >= 1,
+            ApplyMaterial.status <= 64,
+        )
+    ).scalars().all()
+
+    # 我处理过的材料：取最新一条记录
+    rows = db.execute(
+        select(
+            ApproveRecord.material_id,
+            ApproveRecord.status,
+            ApproveRecord.created_at,
+        )
+        .where(ApproveRecord.approver_id == current_user.id)
+        .order_by(ApproveRecord.created_at.asc())
+    ).all()
+    last_action_by_material: dict[int, int] = {}
+    for mid, st, _ in rows:
+        last_action_by_material[int(mid)] = int(st)
+
+    out: list[ApprovalQueueOut] = []
+    for m in materials:
+        proj = db.get(ApplyProject, m.project_id)
+        if not proj:
+            continue
+
+        assignees = afs.assignees_for_current_step(db, m)
+        must_act = False
+        lanes = None
+        if assignees is not None:
+            if current_user.id in assignees and afs.user_still_must_act_on_current_step(
+                db, m, current_user.id
+            ):
+                must_act = True
+                lanes = afs.pending_parallel_lane_indexes_for_user(db, m, current_user.id)
+        else:
+            one = afs.get_legacy_single_assignee(db, proj, m)
+            if one is not None:
+                must_act = one == current_user.id
+            else:
+                if legacy_expected is not None and m.status == legacy_expected:
+                    must_act = True
+
+        last = last_action_by_material.get(int(m.id))
+        include = must_act or last is not None
+        if not include:
+            continue
+
+        my_action_status = 0
+        if must_act:
+            my_action_status = 0
+        elif last == 1:
+            my_action_status = 1
+        elif last in (2, 3):
+            my_action_status = 2
+        else:
+            my_action_status = 0
+
+        out.append(
+            ApprovalQueueOut(
+                id=0,
+                material_id=m.id,
+                approver_id=current_user.id,
+                status=m.status,
+                comment=None,
+                created_at=None,
+                approval_step_count=afs.step_count(m),
+                pending_parallel_lane_indexes=lanes,
+                my_action_status=my_action_status,
+            )
+        )
+    return out
 
 
 @router.post("/{material_id}/approve", response_model=ApprovalOut)

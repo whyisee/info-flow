@@ -273,8 +273,8 @@ export function stepsFromGraph(nodes: Node[], edges: Edge[]): ApprovalStepDraft[
 }
 
 /** 由 steps 生成画布：并行步骤展开为「单节点并行网关 + 各分支审批」+ 显式连线（四端 handle） */
-export function layoutFromSteps(steps: ApprovalStepDraft[]): { nodes: Node[]; edges: Edge[] } {
-  const list = steps.length > 0 ? steps : [defaultLinearStepDraft(1)]
+export function layoutFromSteps(steps: ApprovalStepDraft[] | undefined): { nodes: Node[]; edges: Edge[] } {
+  const list = steps?.length ? steps : [defaultLinearStepDraft(1)]
 
   const nodes: Node[] = [
     {

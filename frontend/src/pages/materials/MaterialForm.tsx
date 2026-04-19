@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { Form, Button, message, Space, Spin, Tag } from "antd";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Form, Button, message, Space, Spin, Tag, Modal, Segmented } from "antd";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import type { Material, Project } from "../../types";
 import * as materialService from "../../services/materials";
 import * as projectService from "../../services/projects";
@@ -13,7 +13,6 @@ import {
   validateDeclarationDraftAttachments,
   validateDeclarationDraftForm,
   type DeclarationDraftShape,
-  type DeclarationConfigRendererProps,
 } from "../../features/declaration-config-render";
 import MaterialBasicInfoFromProfile from "./MaterialBasicInfoFromProfile";
 import {
@@ -21,6 +20,8 @@ import {
   materialStatusLabel,
   materialStepCount,
 } from "../../utils/materialApproval";
+import { previewMaterialMergedPdf } from "../../services/materials";
+import PdfJsBlobViewer from "../../components/PdfJsBlobViewer";
 import "../declaration/profile/ProfileBasicConfig.css";
 import "./MaterialForm.css";
 
@@ -28,16 +29,16 @@ function MaterialDeclarationBridge({
   value,
   onChange,
   config,
-  leadingTab,
   variant,
   materialId,
+  leadingTab,
 }: {
   value?: unknown;
   onChange?: (v: DeclarationDraftShape) => void;
   config: Record<string, unknown>;
-  leadingTab: DeclarationConfigRendererProps["leadingTab"];
   variant?: "preview" | "fill";
   materialId?: number;
+  leadingTab?: { key: string; label: React.ReactNode; children: React.ReactNode };
 }) {
   return (
     <DeclarationConfigRenderer
@@ -46,17 +47,17 @@ function MaterialDeclarationBridge({
       moduleLayout="tabs"
       draft={normalizeDeclarationDraft(value)}
       onDraftChange={onChange}
-      leadingTab={leadingTab}
       materialId={materialId}
+      leadingTab={leadingTab}
     />
   );
 }
 
 export default function MaterialForm() {
   const { id } = useParams();
-  const isEdit = id && id !== "new";
+  const isEdit = Boolean(id && id !== "new");
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const [form] = Form.useForm();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
@@ -65,8 +66,22 @@ export default function MaterialForm() {
   );
   const [declLoading, setDeclLoading] = useState(false);
   const [material, setMaterial] = useState<Material | null>(null);
+  // 基本信息 tab 的数据（存到 content 顶层，单独保存）
+  const [profileData, setProfileData] = useState<Record<string, unknown>>({});
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfViewerMode, setPdfViewerMode] = useState<"system" | "light">("system");
 
-  const newPidRaw = searchParams.get("project_id");
+  // 直接读 window.location，避免 React Router useLocation 的 stale 问题
+  const newPidRaw = (() => {
+    const urlPid = new URLSearchParams(window.location.search).get("project_id");
+    if (urlPid) return urlPid;
+    if (typeof location.state === "object" && location.state != null) {
+      return String((location.state as Record<string, unknown>).project_id ?? null);
+    }
+    return null;
+  })();
   const parsedNewPid =
     newPidRaw != null && newPidRaw !== "" ? Number(newPidRaw) : NaN;
   const newProjectIdOk = Number.isFinite(parsedNewPid) && parsedNewPid > 0;
@@ -80,9 +95,11 @@ export default function MaterialForm() {
 
   useEffect(() => {
     if (isEdit) return;
-    if (newProjectIdOk) return;
-    navigate("/declaration/materials", { replace: true });
-  }, [isEdit, newProjectIdOk, navigate]);
+    // 仅在 URL 有 ?project_id=xxx 但解析失败时才跳转回列表
+    if (!newProjectIdOk && newPidRaw != null && newPidRaw !== "") {
+      navigate("/declaration/materials", { replace: true });
+    }
+  }, [isEdit, newProjectIdOk, newPidRaw]);
 
   useEffect(() => {
     projectService.getProjects().then(setProjects);
@@ -90,6 +107,15 @@ export default function MaterialForm() {
       materialService.getMaterial(Number(id)).then((m) => {
         setMaterial(m);
         const { declaration: declFromContent } = m.content ?? {};
+        const profileFromContent = (m.content as Record<string, unknown>) ?? {};
+        // 基本信息存在 content 顶层，单独提取
+        setProfileData(
+          Object.fromEntries(
+            Object.entries(profileFromContent).filter(
+              ([k]) => k !== "declaration",
+            ),
+          ),
+        );
         form.setFieldsValue({
           declaration: normalizeDeclarationDraft(declFromContent),
         });
@@ -123,9 +149,8 @@ export default function MaterialForm() {
   const onSave = async () => {
     const values = await form.validateFields();
     const { declaration } = values as { declaration?: Record<string, unknown> };
-    const content = {
-      declaration: declaration ?? {},
-    };
+    // profileData 存在 content 顶层，和 declaration 平级
+    const content: Record<string, unknown> = { ...profileData, declaration: declaration ?? {} };
     const pid = resolvedProjectId;
     if (!isEdit && (pid == null || typeof pid !== "number")) return;
     setLoading(true);
@@ -149,7 +174,7 @@ export default function MaterialForm() {
     if (!isEdit || !id) return;
     const values = await form.validateFields();
     const { declaration } = values as { declaration?: Record<string, unknown> };
-    const content = { declaration: declaration ?? {} };
+    const content: Record<string, unknown> = { ...profileData, declaration: declaration ?? {} };
 
     const cfg =
       activeDecl?.config && typeof activeDecl.config === "object"
@@ -184,11 +209,30 @@ export default function MaterialForm() {
     }
   };
 
-  const basicInfoTab = {
-    key: "material_profile_basic",
-    label: "基本信息",
-    children: <MaterialBasicInfoFromProfile />,
-  } as const;
+  const openPdfPreview = useCallback(async () => {
+    if (!material) return;
+    setPdfOpen(true);
+    setPdfLoading(true);
+    try {
+      const blob = await previewMaterialMergedPdf(material.id);
+      setPdfUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+    } catch {
+      message.error("生成预览失败");
+      setPdfOpen(false);
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [material]);
+
+  useEffect(() => {
+    if (!pdfOpen && pdfUrl) {
+      URL.revokeObjectURL(pdfUrl);
+      setPdfUrl(null);
+    }
+  }, [pdfOpen, pdfUrl]);
 
   const projectLabel =
     resolvedProjectId != null
@@ -223,6 +267,9 @@ export default function MaterialForm() {
         </div>
         <Space className="profileFirstSectionActions" size="middle">
           <Button onClick={() => navigate("/declaration/materials")}>取消</Button>
+          {isEdit && material != null && (
+            <Button onClick={openPdfPreview}>预览PDF</Button>
+          )}
           {!readOnly ? (
             <Button onClick={onSave} loading={loading}>
               保存
@@ -263,8 +310,18 @@ export default function MaterialForm() {
                         ? activeDecl.config
                         : { modules: [] }
                     }
-                    leadingTab={basicInfoTab}
                     materialId={material?.id}
+                    leadingTab={
+                      resolvedProjectId != null && !declLoading
+                        ? {
+                            key: "basic",
+                            label: "基本信息",
+                            children: (
+                              <MaterialBasicInfoFromProfile onFieldsLoaded={setProfileData} />
+                            ),
+                          }
+                        : undefined
+                    }
                   />
                 </Form.Item>
               ) : null}
@@ -272,6 +329,43 @@ export default function MaterialForm() {
           </div>
         ) : null}
       </Form>
+
+      <Modal
+        open={pdfOpen}
+        onCancel={() => setPdfOpen(false)}
+        footer={null}
+        width={720}
+        title="PDF 预览"
+      >
+        {pdfLoading ? (
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 16 }}>正在生成预览…</div>
+          </div>
+        ) : pdfUrl ? (
+          <>
+            <div style={{ marginBottom: 12 }}>
+              <Segmented
+                value={pdfViewerMode}
+                onChange={(v) => setPdfViewerMode(v as "system" | "light")}
+                options={[
+                  { label: "系统查看器", value: "system" },
+                  { label: "轻量查看器", value: "light" },
+                ]}
+              />
+            </div>
+            {pdfViewerMode === "light" ? (
+              <PdfJsBlobViewer url={pdfUrl} />
+            ) : (
+              <iframe
+                className="materialFormPdfFrame"
+                src={pdfUrl}
+                title="pdf-preview"
+              />
+            )}
+          </>
+        ) : null}
+      </Modal>
     </div>
   );
 }

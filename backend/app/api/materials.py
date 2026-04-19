@@ -776,7 +776,7 @@ def preview_material_pdf(
         if not group_rows:
             continue
         profile_flows.append(Paragraph(group_title, style_h2))
-        if group_title == "基本信息" and id_photo_path:
+        if group_title == "基本信息" and id_photo_path and os.path.isfile(id_photo_path):
             try:
                 img = RLImage(id_photo_path)
                 img.drawHeight = 36 * mm
@@ -936,6 +936,8 @@ def preview_material_pdf(
     attachment_outline: list[tuple[str, int]] = []
     for a in pdfs:
         try:
+            if not os.path.isfile(a.file_path):
+                continue
             start = len(writer.pages)
             reader = PdfReader(a.file_path)
             for page in reader.pages:

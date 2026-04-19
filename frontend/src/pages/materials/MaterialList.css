@@ -51,3 +51,34 @@
 .materialListDescCell {
   max-width: 320px;
 }
+
+.materialProjectPickCard {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.materialProjectPickCard .ant-card-body {
+  padding: 20px;
+}
+
+.materialProjectPickCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.materialProjectPickCardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.materialProjectPickWarning {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+}

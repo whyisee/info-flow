@@ -21,7 +21,11 @@ const PROFILE_LOAD_MODULES = [
   PROFILE_MODULE.SUPERVISOR,
 ] as const;
 
-export default function MaterialBasicInfoFromProfile() {
+interface Props {
+  onFieldsLoaded?: (values: Record<string, unknown>) => void;
+}
+
+export default function MaterialBasicInfoFromProfile({ onFieldsLoaded }: Props) {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(true);
   const [hasConfig, setHasConfig] = useState(false);
@@ -35,6 +39,7 @@ export default function MaterialBasicInfoFromProfile() {
       if (!basicCfg || typeof basicCfg !== "object") {
         form.resetFields();
         setHasConfig(false);
+        onFieldsLoaded?.({});
         return;
       }
       const merged = mergeModulesIntoFormValues(
@@ -53,17 +58,20 @@ export default function MaterialBasicInfoFromProfile() {
       if (Object.keys(normalized).length === 0) {
         form.resetFields();
         setHasConfig(false);
+        onFieldsLoaded?.({});
         return;
       }
       form.setFieldsValue(normalized);
       setHasConfig(true);
+      onFieldsLoaded?.(normalized);
     } catch {
       form.resetFields();
       setHasConfig(false);
+      onFieldsLoaded?.({});
     } finally {
       setLoading(false);
     }
-  }, [form]);
+  }, [form, onFieldsLoaded]);
 
   useEffect(() => {
     load();

@@ -10,6 +10,10 @@ import {
   Input,
   Space,
   Typography,
+  Card,
+  Row,
+  Col,
+  Badge,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -23,6 +27,7 @@ import {
 } from "../../utils/materialApproval";
 import * as materialService from "../../services/materials";
 import * as projectService from "../../services/projects";
+import { getActiveDeclarationConfig } from "../../services/declarationConfig";
 import "./MaterialList.css";
 
 const MATERIAL_STATUS_FILTER_OPTIONS = [
@@ -68,6 +73,8 @@ export default function MaterialList() {
   const [loading, setLoading] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
   const [pickProjectId, setPickProjectId] = useState<number | undefined>();
+  const [projectDeclVersions, setProjectDeclVersions] = useState<Record<number, number>>({});
+  const [pickExistingMaterials, setPickExistingMaterials] = useState<Material[]>([]);
   const [appliedFilter, setAppliedFilter] = useState<MaterialListAppliedFilter>({
     keyword: "",
     project_id: "all",
@@ -92,6 +99,31 @@ export default function MaterialList() {
   useEffect(() => {
     projectService.getProjects().then(setProjects).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!pickOpen || projects.length === 0) return;
+    Promise.all(
+      projects.map((p) =>
+        getActiveDeclarationConfig(p.id)
+          .then((row) => ({ id: p.id, version: row?.version ?? null }))
+          .catch(() => ({ id: p.id, version: null })),
+      ),
+    ).then((results) => {
+      const map: Record<number, number> = {};
+      for (const r of results) {
+        if (r.version != null) map[r.id] = r.version;
+      }
+      setProjectDeclVersions(map);
+    });
+  }, [pickOpen, projects]);
+
+  useEffect(() => {
+    if (pickProjectId == null) {
+      setPickExistingMaterials([]);
+    } else {
+      setPickExistingMaterials(materials.filter((m) => m.project_id === pickProjectId));
+    }
+  }, [pickProjectId, materials]);
 
   const projectById = useMemo(() => {
     const m = new Map<number, Project>();
@@ -223,7 +255,9 @@ export default function MaterialList() {
 
   const confirmPick = () => {
     if (pickProjectId == null) return;
-    navigate(`/declaration/materials/new?project_id=${pickProjectId}`);
+    navigate(`/declaration/materials/new?project_id=${pickProjectId}`, {
+      state: { project_id: pickProjectId },
+    });
     setPickOpen(false);
   };
 
@@ -290,24 +324,102 @@ export default function MaterialList() {
       <Modal
         title="选择申报项目"
         open={pickOpen}
-        onOk={confirmPick}
         onCancel={() => setPickOpen(false)}
-        okButtonProps={{ disabled: pickProjectId == null }}
+        footer={
+          <Space>
+            <Button onClick={() => setPickOpen(false)}>取消</Button>
+            {pickExistingMaterials.length > 0 ? (
+              <Button
+                type="primary"
+                onClick={confirmPick}
+              >
+                继续新建
+              </Button>
+            ) : (
+              <Button
+                type="primary"
+                disabled={pickProjectId == null}
+                onClick={confirmPick}
+              >
+                确定
+              </Button>
+            )}
+          </Space>
+        }
+        width={720}
         destroyOnClose
       >
-        <Select
-          style={{ width: "100%" }}
-          placeholder="请选择项目"
-          value={pickProjectId}
-          onChange={(v) => setPickProjectId(v)}
-          options={projects.map((p) => ({
-            value: p.id,
-            label: p.name,
-            title: p.description?.trim() ? `${p.name} — ${p.description}` : p.name,
-          }))}
-          showSearch
-          optionFilterProp="label"
-        />
+        <Row gutter={[16, 16]}>
+          {projects.map((p) => {
+            const selected = pickProjectId === p.id;
+            const start = p.start_time ? dayjs(p.start_time).format("YYYY-MM-DD") : null;
+            const end = p.end_time ? dayjs(p.end_time).format("YYYY-MM-DD") : null;
+            const period = start && end ? `${start} 至 ${end}` : start ?? (end ?? null);
+            return (
+              <Col key={p.id} xs={24} sm={12}>
+                <Card
+                  hoverable
+                  className="materialProjectPickCard"
+                  style={{
+                    borderColor: selected ? "#1677ff" : undefined,
+                    backgroundColor: selected ? "#e6f4ff" : undefined,
+                  }}
+                  onClick={() => setPickProjectId(p.id)}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <Typography.Text strong style={{ fontSize: 15 }}>
+                          {p.name}
+                        </Typography.Text>
+                        {projectDeclVersions[p.id] != null && (
+                          <Tag color="blue">V{projectDeclVersions[p.id]}</Tag>
+                        )}
+                      </div>
+                      {selected && (
+                        <Badge status="success" text="已选择" />
+                      )}
+                    </div>
+                    <div>
+                      <Typography.Text style={{ fontSize: 13 }}>
+                        {p.description || "暂无项目说明"}
+                      </Typography.Text>
+                    </div>
+                    <div className="materialProjectPickCardMeta">
+                      {period && (
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {period}
+                        </Typography.Text>
+                      )}
+                      {p.created_at && (
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          创建于 {dayjs(p.created_at).format("YYYY-MM-DD")}
+                        </Typography.Text>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              </Col>
+            );
+          })}
+        </Row>
+        {pickExistingMaterials.length > 0 && (
+          <div className="materialProjectPickWarning">
+            <Typography.Text type="warning" strong>
+              该项目已有 {pickExistingMaterials.length} 条申报记录：
+            </Typography.Text>
+            <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+              {pickExistingMaterials.map((m) => (
+                <li key={m.id}>
+                  <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                    申报 #{m.id} · 创建于 {formatDateTime(m.created_at)} ·{" "}
+                    {materialStatusLabel(m.status, materialStepCount(m))}
+                  </Typography.Text>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Modal>
     </div>
   );

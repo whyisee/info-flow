@@ -161,6 +161,8 @@ def preview_material_pdf(
 
     # ---- helpers: font / styles / translations ----
     # 注册中文字体（优先系统字体；失败则退回默认字体，可能中文乱码）
+    import logging
+    _log = logging.getLogger(__file__)
     font_name = "Helvetica"
     try:
         candidates = [
@@ -169,21 +171,22 @@ def preview_material_pdf(
             "/System/Library/Fonts/STHeiti Light.ttc",
             "/Library/Fonts/Arial Unicode.ttf",
             # Linux
-            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-            "/usr/share/fonts/truetype/arphic/uming.ttc",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+            "/usr/share/fonts/google-noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
         ]
         for p in candidates:
-            try:
-                pdfmetrics.registerFont(TTFont("CJKFont", p))
-                font_name = "CJKFont"
-                break
-            except Exception:
-                continue
-    except Exception:
-        pass
+            if os.path.isfile(p):
+                try:
+                    pdfmetrics.registerFont(TTFont("CJKFont", p))
+                    font_name = "CJKFont"
+                    _log.warning(f"PDF font registered: {p}")
+                    break
+                except Exception as e:
+                    _log.warning(f"PDF font failed {p}: {e}")
+            else:
+                _log.warning(f"PDF font not found: {p}")
+    except Exception as e:
+        _log.warning(f"PDF font setup error: {e}")
 
     styles = getSampleStyleSheet()
     style_h1 = ParagraphStyle(

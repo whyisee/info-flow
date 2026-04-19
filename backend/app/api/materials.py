@@ -168,6 +168,12 @@ def preview_material_pdf(
             "/System/Library/Fonts/PingFang-SC-Regular.ttf",
             "/System/Library/Fonts/STHeiti Light.ttc",
             "/Library/Fonts/Arial Unicode.ttf",
+            # Linux
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            "/usr/share/fonts/truetype/arphic/uming.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
         ]
         for p in candidates:
             try:

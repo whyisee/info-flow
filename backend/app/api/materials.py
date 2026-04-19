@@ -931,7 +931,22 @@ def preview_material_pdf(
     def _append_reader(r: PdfReader) -> int:
         start = len(writer.pages)
         for p in r.pages:
-            writer.add_page(p)
+            try:
+                writer.add_page(p)
+            except Exception:
+                # 某些附件 PDF 有重复字典键（如 /MediaBox），尝试用 temp writer 中转后复制
+                try:
+                    from pypdf import PdfWriter as TempWriter
+
+                    tmp = TempWriter()
+                    tmp.add_page(p)
+                    buf = BytesIO()
+                    tmp.write(buf)
+                    buf.seek(0)
+                    tmp_reader = PdfReader(buf)
+                    writer.add_page(tmp_reader.pages[0])
+                except Exception:
+                    pass
         return start
 
     # 先放 cover，TOC 生成后再插入
@@ -947,7 +962,21 @@ def preview_material_pdf(
             start = len(writer.pages)
             reader = PdfReader(a.file_path)
             for page in reader.pages:
-                writer.add_page(page)
+                try:
+                    writer.add_page(page)
+                except Exception:
+                    try:
+                        from pypdf import PdfWriter as TempWriter
+
+                        tmp = TempWriter()
+                        tmp.add_page(page)
+                        buf = BytesIO()
+                        tmp.write(buf)
+                        buf.seek(0)
+                        tmp_reader = PdfReader(buf)
+                        writer.add_page(tmp_reader.pages[0])
+                    except Exception:
+                        pass
             name = (a.file_name or "").strip() or f"附件-{a.id}"
             attachment_outline.append((name, start))
         except Exception:

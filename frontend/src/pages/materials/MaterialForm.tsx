@@ -68,8 +68,8 @@ function MaterialDeclarationBridge({
     <DeclarationConfigRenderer
       variant={variant ?? "fill"}
       config={config}
-      moduleLayout={variant === "fill" ? "stack" : "tabs"}
-      displayMode={variant === "fill" ? "print" : "standard"}
+      moduleLayout="stack"
+      displayMode="print"
       draft={normalizeDeclarationDraft(value)}
       onDraftChange={onChange}
       materialId={materialId}

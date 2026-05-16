@@ -1,0 +1,102 @@
+InfoFlow
+申报
+问卷
+系统
+帮助文档采集账号
+用户与安全
+用户管理
+权限目录
+角色授权
+系统配置
+系统设置
+字典维护
+基本信息字段
+基本信息字段
+基本信息字段配置
+模块
+启用：全部
+刷 新
+新增字段
+字段目录用于「我的资料」动态表单。语义键创建后不可改；停用后新项目可选用列表会隐藏（教师端仅展示启用项）。
+ID	field_key	标签	模块	类型	排序	启用	操作
+
+ID
+	
+field_key
+	
+标签
+	
+模块
+	
+类型
+	
+排序
+	
+启用
+	
+操作
+
+2	full_name	姓名	declaration_basic	text	1	是	
+编辑
+
+4	gender	性别	declaration_basic	select	10	是	
+编辑
+
+9	ethnicity	民族	declaration_basic	select	20	是	
+编辑
+
+3	project_name	项目名称	declaration_basic	text	30	否	
+编辑
+
+7	id_type_display	证件类型	declaration_basic	select	40	是	
+编辑
+
+5	nationality	国籍地区	declaration_basic	select	50	否	
+编辑
+
+6	birth_date	出生年月	declaration_basic	date	60	是	
+编辑
+
+8	id_number	证件号码	declaration_basic	text	80	是	
+编辑
+
+10	political_status	政治面貌	declaration_basic	select	100	是	
+编辑
+
+11	id_pdf	身份证件 PDF	declaration_basic	upload	110	否	
+编辑
+
+12	birth_proof_pdf	出生证明 PDF	declaration_basic	upload	120	否	
+编辑
+
+13	highest_edu_country	最高学历国别/地区	declaration_basic	text	130	否	
+编辑
+
+14	highest_edu_school	最高学历毕业院校	declaration_basic	text	140	否	
+编辑
+
+15	highest_edu_level	最高学历	declaration_basic	select	150	是	
+编辑
+
+16	highest_edu_proof_pdf	最高学历证明 PDF	declaration_basic	upload	160	否	
+编辑
+
+17	highest_degree_country	最高学位国别/地区	declaration_basic	text	170	否	
+编辑
+
+18	highest_degree_school	最高学位授予院校	declaration_basic	text	180	否	
+编辑
+
+19	highest_degree_level	最高学位	declaration_basic	select	190	是	
+编辑
+
+1	recommend_school	推荐学校	declaration_basic	text	200	否	
+编辑
+
+20	highest_degree_proof_pdf	最高学位证明 PDF	declaration_basic	upload	200	否	
+编辑
+1
+2
+3
+4
+20 条/页

@@ -33,6 +33,9 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
+# 本地启停脚本 PID / 日志
+.run/
+
 
 # Alembic
 backend/alembic/versions/*.pyc

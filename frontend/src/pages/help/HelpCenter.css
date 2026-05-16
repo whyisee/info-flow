@@ -1,0 +1,178 @@
+.helpCenter {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 20px;
+  height: 100%;
+  min-height: calc(100vh - 152px);
+}
+
+.helpCenterNav {
+  border-right: 1px solid #f0f0f0;
+  padding: 4px 16px 4px 0;
+  overflow: auto;
+}
+
+.helpCenterNavHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.helpCenterNavHeader .ant-typography {
+  margin: 0;
+}
+
+.helpCenterCreateButton {
+  margin-bottom: 12px;
+}
+
+.helpCenterSearch {
+  margin-bottom: 12px;
+}
+
+.helpCenterDocList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.helpCenterDocItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #303133;
+  cursor: pointer;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.helpCenterDocItem:hover {
+  background: #f5f7fa;
+}
+
+.helpCenterDocItemActive {
+  background: #e6f4ff;
+  color: #1677ff;
+  font-weight: 600;
+}
+
+.helpCenterDocItem span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.helpCenterMain {
+  min-width: 0;
+  overflow: auto;
+  padding: 4px 4px 40px;
+}
+
+.helpCenterToolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.helpCenterToolbar .ant-typography {
+  margin: 0 0 8px;
+}
+
+.helpMarkdown {
+  max-width: 980px;
+  color: #202124;
+  line-height: 1.75;
+}
+
+.helpMarkdown h1 {
+  margin: 0 0 18px;
+  font-size: 28px;
+}
+
+.helpMarkdown h2 {
+  margin: 28px 0 12px;
+  border-bottom: 1px solid #eef0f3;
+  padding-bottom: 8px;
+  font-size: 20px;
+}
+
+.helpMarkdown h3 {
+  margin: 22px 0 10px;
+  font-size: 16px;
+}
+
+.helpMarkdown p {
+  margin: 0 0 12px;
+}
+
+.helpMarkdown ul,
+.helpMarkdown ol {
+  margin: 0 0 14px 22px;
+  padding: 0;
+}
+
+.helpMarkdown code {
+  border-radius: 4px;
+  background: #f4f6f8;
+  padding: 2px 5px;
+  color: #c41d7f;
+  font-size: 0.94em;
+}
+
+.helpMarkdownFigure {
+  margin: 0 0 22px;
+}
+
+.helpMarkdownFigure img {
+  display: block;
+  max-width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.helpCenterEmpty {
+  display: grid;
+  min-height: 360px;
+  place-items: center;
+}
+
+.helpCenterEditorMeta {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.3fr) minmax(220px, 1.2fr);
+  width: 100%;
+}
+
+.helpCenterEditorMeta .ant-form-item {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 900px) {
+  .helpCenter {
+    grid-template-columns: 1fr;
+  }
+
+  .helpCenterNav {
+    max-height: 320px;
+    border-right: 0;
+    border-bottom: 1px solid #f0f0f0;
+    padding: 0 0 16px;
+  }
+
+  .helpCenterToolbar {
+    flex-direction: column;
+  }
+
+  .helpCenterEditorMeta {
+    grid-template-columns: 1fr;
+  }
+}

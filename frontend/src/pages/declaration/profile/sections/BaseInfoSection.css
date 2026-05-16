@@ -1,0 +1,105 @@
+/* 新版基本信息卡片（截图版栅格 + 申报材料） */
+
+.profileBasicInfoCardWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+}
+
+.profileBasicCard {
+  border-radius: 10px !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.profileBasicCard.ant-card .ant-card-head {
+  min-height: 44px;
+  border-bottom-color: rgba(15, 23, 42, 0.06);
+}
+
+.profileBasicCard.ant-card .ant-card-head-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.profileBasicCard.ant-card .ant-card-body {
+  background: #fff;
+}
+
+.profilePickerFull.ant-picker {
+  width: 100%;
+}
+
+.profileCollapseProof .ant-collapse-header {
+  font-weight: 600;
+}
+
+.profileCollapseProof .ant-collapse-content-box {
+  padding-top: 8px !important;
+}
+
+.profileInlineRegionTag {
+  white-space: nowrap;
+  line-height: 32px;
+}
+
+/* 学历块：层级已上移到基本信息卡，此处仅剩国家+学校 */
+.profileEduLineTop.profileEduLineTopCompact {
+  grid-template-columns: auto 168px minmax(160px, 1fr);
+  min-width: min(100%, 440px);
+}
+
+/* Excel 风格：固定列网格，保证竖线对齐 */
+.profileExcelTable {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  border-top: 1px solid rgba(15, 23, 42, 0.16);
+  border-left: 1px solid rgba(15, 23, 42, 0.16);
+}
+
+.profileExcelCell {
+  border-right: 1px solid rgba(15, 23, 42, 0.16);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.16);
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.profileExcelCell .ant-form-item {
+  margin-bottom: 0 !important;
+}
+
+.profileExcelCell .ant-form-item-label {
+  padding-bottom: 6px;
+}
+
+.profileExcelCell .ant-form-item-label > label {
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.78);
+}
+
+.profileExcelSpan1 { grid-column: span 1; }
+.profileExcelSpan2 { grid-column: span 2; }
+.profileExcelSpan3 { grid-column: span 3; }
+.profileExcelSpan4 { grid-column: span 4; }
+.profileExcelSpan5 { grid-column: span 5; }
+.profileExcelSpan6 { grid-column: span 6; }
+.profileExcelSpan7 { grid-column: span 7; }
+.profileExcelSpan8 { grid-column: span 8; }
+.profileExcelSpan9 { grid-column: span 9; }
+.profileExcelSpan10 { grid-column: span 10; }
+.profileExcelSpan11 { grid-column: span 11; }
+.profileExcelSpan12 { grid-column: span 12; }
+
+@media (max-width: 992px) {
+  .profileExcelTable {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 576px) {
+  .profileExcelTable {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

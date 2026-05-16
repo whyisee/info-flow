@@ -81,9 +81,12 @@ export interface Project {
 export interface Material {
   id: number
   user_id: number
+  creator_name?: string | null
   project_id: number
   content: Record<string, unknown>
   status: number
+  workflow_status?: 'draft' | 'reviewing' | 'approved' | 'returned' | 'rejected' | 'cancelled' | string | null
+  current_step_index?: number | null
   profile_version_id?: number | null
   submitted_at?: string
   /** 申报记录创建时间（ISO） */

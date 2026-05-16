@@ -24,6 +24,9 @@ PERMISSION_CODES: list[tuple[str, str, str]] = [
     ("system:settings:view", "系统设置", "system"),
     ("system:dict:read", "数据字典查询", "system"),
     ("system:dict:manage", "数据字典维护", "system"),
+    ("system:profile-field:manage", "基本信息字段配置", "system"),
+    ("system:help:view", "查看帮助中心", "system"),
+    ("system:help:manage", "管理帮助文档", "system"),
 ]
 
 # 系统预置旧版角色编码（user.role / Role.code）
@@ -38,6 +41,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "survey:overview:view",
         "survey:fill:use",
         "system:dict:read",
+        "system:help:view",
     ],
     "dept_admin": [
         "declaration:dashboard:view",
@@ -45,6 +49,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "survey:overview:view",
         "survey:fill:use",
         "system:dict:read",
+        "system:help:view",
     ],
     "school_admin": [p[0] for p in PERMISSION_CODES],
     "expert": [
@@ -53,6 +58,7 @@ ROLE_PERMISSION_MAP: dict[str, list[str]] = {
         "survey:overview:view",
         "survey:fill:use",
         "system:dict:read",
+        "system:help:view",
     ],
 }
 

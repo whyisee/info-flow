@@ -4,7 +4,6 @@ import {
   FileTextOutlined,
   FileOutlined,
   MinusOutlined,
-  PlusOutlined,
   StarOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
@@ -66,19 +65,28 @@ function PaletteItem({ label, icon, color }: { label: string; icon: React.ReactN
 
 export function FormDesignerPalette() {
   return (
-    <Card
-      size="small"
-      title={<span style={{ fontSize: 13 }}>题目组件</span>}
-      styles={{ body: { padding: "8px 10px" } }}
+    <div
+      style={{
+        position: "fixed",
+        top: 150,
+        left: 16,
+        zIndex: 200,
+      }}
     >
-      <div className="palette-grid">
-        {QUESTION_TYPES.map((t) => (
-          <PaletteItem key={t.fieldType} label={String(t.label)} icon={t.icon} color={String(t.color)} />
-        ))}
-      </div>
-      <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 11 }}>
-        拖入画布添加题目，点击题目可编辑属性
-      </Typography.Paragraph>
-    </Card>
+      <Card
+        size="small"
+        title={<span style={{ fontSize: 13 }}>题目组件</span>}
+        styles={{ body: { padding: "8px 10px" } }}
+      >
+        <div className="palette-grid">
+          {QUESTION_TYPES.map((t) => (
+            <PaletteItem key={t.fieldType} label={String(t.label)} icon={t.icon} color={String(t.color)} />
+          ))}
+        </div>
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 11 }}>
+          拖入画布添加题目，点击题目可编辑属性
+        </Typography.Paragraph>
+      </Card>
+    </div>
   );
 }

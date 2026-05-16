@@ -1,7 +1,7 @@
 import { Button, Card, Input, message, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import type { InputRef } from "antd";
 import { EditOutlined } from "@ant-design/icons";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   getSurveyTemplate,
@@ -158,11 +158,6 @@ export default function SurveyDesign() {
     setDescEditing(true);
     setTimeout(() => descInputRef.current?.focus(), 0);
   };
-
-  const title = useMemo(
-    () => (template ? `问卷设计 — ${template.name}` : "问卷设计"),
-    [template],
-  );
 
   if (loading) {
     return (

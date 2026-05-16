@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   Button,
   Card,
@@ -40,7 +40,6 @@ const statusLabel: Record<string, { color: string; text: string }> = {
 export default function ProjectApprovalFlowConfig() {
   const { projectId: projectIdParam } = useParams<{ projectId: string }>();
   const projectId = Number(projectIdParam);
-  const navigate = useNavigate();
 
   const [project, setProject] = useState<Project | null>(null);
   const [rows, setRows] = useState<ApprovalFlowVersionRecord[]>([]);
@@ -320,7 +319,7 @@ export default function ProjectApprovalFlowConfig() {
             <ApprovalFlowCanvasEditor
               key={canvasMountKey}
               ref={canvasRef}
-              steps={canvasSteps}
+              defaultSteps={canvasSteps}
               readOnly={!editing}
               approverOptions={approverOptions}
             />

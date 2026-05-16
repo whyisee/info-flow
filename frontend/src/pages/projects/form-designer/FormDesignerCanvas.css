@@ -12,16 +12,19 @@
   padding: 10px 12px;
   margin-bottom: 6px;
   background: #ffffff;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .fdNode:hover {
   border-color: #b3c4e8;
-  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.06);
+  box-shadow: 0 4px 16px rgba(22, 119, 255, 0.12);
+  transform: translateY(-1px);
 }
 
 .fdNodeSelected {
   box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.18), 0 4px 16px rgba(22, 119, 255, 0.1);
+  transform: translateY(-1px);
 }
 
 .fdNodeHeader {

@@ -1,5 +1,5 @@
 import { Button, Card, Modal, Space, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FieldDef, FormNode } from "../../../features/form-designer/types";
 import { FormDesignerCanvas } from "./FormDesignerCanvas";
 import { FormDesignerInspector } from "./FormDesignerInspector";
@@ -49,7 +49,7 @@ export function FormDesignerEditor({
   }, [value.schemaJson, value.fieldsJson]);
 
   const commit = (nextSchema: FormNode, nextFields: Record<string, FieldDef>) => {
-    // 自动为 schema 中有但 fields 中没有的节点创建 FieldDef
+    // auto FieldDef creation for schema nodes without matching fields
     const allNames = new Set<string>();
     function collectNames(n: FormNode) {
       allNames.add(n.id);
@@ -59,22 +59,8 @@ export function FormDesignerEditor({
     }
     collectNames(nextSchema);
 
-    // 找出需要补全的 field 节点名（kind=Field 且有 name）
-    function needsFieldDef(n: FormNode): FormNode | null {
-      if (n.kind === "Field" && (n as any).name) return n;
-      if ("children" in n && Array.isArray(n.children)) {
-        for (const c of n.children) {
-          const f = needsFieldDef(c);
-          if (f) return f;
-        }
-      }
-      return null;
-    }
-    const nodeNeedingField = needsFieldDef(nextSchema);
     let autoFields = nextFields;
 
-    // 简单策略：如果 schema 里有 Field 但 fields 为空，说明是刚从 palette 拖过来的
-    // 遍历所有 Field 节点，补全缺失的 FieldDef
     function fillFields(n: FormNode, fields: Record<string, FieldDef>): Record<string, FieldDef> {
       if (n.kind === "Field" && (n as any).name) {
         const name = (n as any).name as string;
@@ -119,27 +105,27 @@ export function FormDesignerEditor({
   };
 
   return (
-    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+    <>
       {!readOnly && <FormDesignerPalette />}
-
-      <Card
-        size="small"
-        title="画布"
-        style={{ flex: 1, minWidth: 0 }}
-        extra={
-          <Space size={8}>
-            {readOnly && (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                只读模式（查看历史版本）
-              </Typography.Text>
-            )}
-            <Button size="small" onClick={() => setRawOpen(true)}>
-              JSON
-            </Button>
-          </Space>
-        }
-      >
-        <div style={{ position: "relative" }}>
+      <div style={{ display: "flex", flex: 1, gap: 12, alignItems: "flex-start" }}>
+        <Card
+          size="small"
+          title="画布"
+          style={{ flex: 1, minWidth: 0, position: "relative" }}
+          bodyStyle={{ padding: 0 }}
+          extra={
+            <Space size={8}>
+              {readOnly && (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  只读模式（查看历史版本）
+                </Typography.Text>
+              )}
+              <Button size="small" onClick={() => setRawOpen(true)}>
+                JSON
+              </Button>
+            </Space>
+          }
+        >
           <FormDesignerCanvas
             schema={schema}
             selectedId={readOnly ? null : selectedId}
@@ -147,10 +133,9 @@ export function FormDesignerEditor({
             onSchemaChange={readOnly ? () => {} : (next) => commit(next, fields)}
             fields={fields}
           />
-        </div>
-      </Card>
+        </Card>
 
-      {!readOnly && (
+        {!readOnly && (
           <FormDesignerInspector
             schema={schema}
             selectedId={selectedId}
@@ -158,7 +143,8 @@ export function FormDesignerEditor({
             onSchemaChange={(next) => commit(next, fields)}
             onFieldsChange={(next) => commit(schema, next)}
           />
-      )}
+        )}
+      </div>
 
       <Modal
         title="表单 JSON"
@@ -178,6 +164,6 @@ export function FormDesignerEditor({
           </Card>
         </Space>
       </Modal>
-    </div>
+    </>
   );
 }

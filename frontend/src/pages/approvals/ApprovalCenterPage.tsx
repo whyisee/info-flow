@@ -95,13 +95,13 @@ function MyProgressPanel() {
             width: 140,
             render: (_: number, row: Material) => {
               const n = materialStepCount(row);
-              const label = materialStatusLabel(row.status, n);
+              const label = materialStatusLabel(row.status, n, row.workflow_status, row.current_step_index);
               const color =
-                row.status === 0
+                row.workflow_status === "draft" || row.status === 0
                   ? "default"
-                  : row.status === 5
+                  : row.workflow_status === "returned" || row.workflow_status === "rejected" || row.status === 5
                     ? "red"
-                    : row.status === n + 1
+                    : row.workflow_status === "approved" || row.status === n + 1
                       ? "green"
                       : STATUS_COLORS[row.status] ?? "processing";
               return <Tag color={color}>{label}</Tag>;
@@ -148,6 +148,8 @@ function MyProgressPanel() {
           <MaterialApprovalProgress
             materialId={activeMaterial.id}
             materialStatus={activeMaterial.status}
+            workflowStatus={activeMaterial.workflow_status}
+            currentStepIndex={activeMaterial.current_step_index}
             projectId={activeMaterial.project_id}
             snapshotDisplay={activeMaterial.approval_snapshot_display ?? null}
           />

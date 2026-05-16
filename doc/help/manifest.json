@@ -1,0 +1,115 @@
+[
+  {
+    "slug": "login",
+    "title": "登录页",
+    "path": "/login",
+    "public": true,
+    "screenshot": "screenshots/login.png",
+    "text": "screenshots/login.txt"
+  },
+  {
+    "slug": "declaration-dashboard",
+    "title": "申报首页",
+    "path": "/declaration/dashboard",
+    "screenshot": "screenshots/declaration-dashboard.png",
+    "text": "screenshots/declaration-dashboard.txt"
+  },
+  {
+    "slug": "declaration-profile",
+    "title": "我的资料-基本信息",
+    "path": "/declaration/profile",
+    "screenshot": "screenshots/declaration-profile.png",
+    "text": "screenshots/declaration-profile.txt"
+  },
+  {
+    "slug": "declaration-projects",
+    "title": "申报业务-项目管理",
+    "path": "/declaration/projects",
+    "screenshot": "screenshots/declaration-projects.png",
+    "text": "screenshots/declaration-projects.txt"
+  },
+  {
+    "slug": "declaration-materials",
+    "title": "申报业务-我的申报",
+    "path": "/declaration/materials",
+    "screenshot": "screenshots/declaration-materials.png",
+    "text": "screenshots/declaration-materials.txt"
+  },
+  {
+    "slug": "declaration-approvals",
+    "title": "申报业务-审批中心",
+    "path": "/declaration/approvals",
+    "screenshot": "screenshots/declaration-approvals.png",
+    "text": "screenshots/declaration-approvals.txt"
+  },
+  {
+    "slug": "declaration-templates",
+    "title": "申报业务-模板管理",
+    "path": "/declaration/templates",
+    "screenshot": "screenshots/declaration-templates.png",
+    "text": "screenshots/declaration-templates.txt"
+  },
+  {
+    "slug": "survey-home",
+    "title": "问卷概览",
+    "path": "/survey",
+    "screenshot": "screenshots/survey-home.png",
+    "text": "screenshots/survey-home.txt"
+  },
+  {
+    "slug": "survey-design",
+    "title": "问卷应用-问卷设计",
+    "path": "/survey/design",
+    "screenshot": "screenshots/survey-design.png",
+    "text": "screenshots/survey-design.txt"
+  },
+  {
+    "slug": "survey-export",
+    "title": "问卷应用-问卷数据",
+    "path": "/survey/export",
+    "screenshot": "screenshots/survey-export.png",
+    "text": "screenshots/survey-export.txt"
+  },
+  {
+    "slug": "system-users",
+    "title": "系统-用户管理",
+    "path": "/system/users",
+    "screenshot": "screenshots/system-users.png",
+    "text": "screenshots/system-users.txt"
+  },
+  {
+    "slug": "system-permission-catalog",
+    "title": "系统-权限目录",
+    "path": "/system/permissions/catalog",
+    "screenshot": "screenshots/system-permission-catalog.png",
+    "text": "screenshots/system-permission-catalog.txt"
+  },
+  {
+    "slug": "system-permission-roles",
+    "title": "系统-角色授权",
+    "path": "/system/permissions/roles",
+    "screenshot": "screenshots/system-permission-roles.png",
+    "text": "screenshots/system-permission-roles.txt"
+  },
+  {
+    "slug": "system-settings",
+    "title": "系统-系统设置",
+    "path": "/system/settings",
+    "screenshot": "screenshots/system-settings.png",
+    "text": "screenshots/system-settings.txt"
+  },
+  {
+    "slug": "system-dict",
+    "title": "系统-字典维护",
+    "path": "/system/dict",
+    "screenshot": "screenshots/system-dict.png",
+    "text": "screenshots/system-dict.txt"
+  },
+  {
+    "slug": "system-profile-fields",
+    "title": "系统-基本信息字段",
+    "path": "/system/profile-fields",
+    "screenshot": "screenshots/system-profile-fields.png",
+    "text": "screenshots/system-profile-fields.txt"
+  }
+]

@@ -5,7 +5,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Card, Form, Space, Spin, message } from "antd";
+import { Card, Form, Modal, Space, Spin, message } from "antd";
+import type { DeclarationConfigValidationIssue } from "../../services/declarationConfig";
 import type { DeclarationConfigRecord } from "../../services/declarationConfig";
 import * as declarationConfigApi from "../../services/declarationConfig";
 import { normalizeDeclarationConfig } from "../../features/declaration-config-render";
@@ -139,6 +140,36 @@ export const DeclarationConfigEditorPanel: React.ForwardRefExoticComponent<
   const publish = async () => {
     if (readonly) return;
     try {
+      await form.validateFields();
+      const vals = form.getFieldsValue(true) as DeclarationFormValues;
+      const config = formValuesToConfig(vals) as Record<string, unknown>;
+      const validation = await declarationConfigApi.validateDeclarationConfig(projectId, config);
+      if (validation.errors.length > 0) {
+        Modal.error({
+          title: "配置校验未通过",
+          width: 720,
+          content: <ValidationIssueList issues={validation.errors} />,
+        });
+        return;
+      }
+      if (validation.warnings.length > 0) {
+        const ok = await new Promise<boolean>((resolve) => {
+          Modal.confirm({
+            title: "配置存在提示项，是否继续发布？",
+            width: 720,
+            content: <ValidationIssueList issues={validation.warnings} />,
+            okText: "继续发布",
+            cancelText: "返回修改",
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          });
+        });
+        if (!ok) return;
+      }
+      await declarationConfigApi.updateDeclarationConfig(projectId, record.id, {
+        label: label.trim() || undefined,
+        config,
+      });
       await declarationConfigApi.publishDeclarationConfig(projectId, record.id);
       message.success("已提交");
       onPublished();
@@ -185,3 +216,19 @@ export const DeclarationConfigEditorPanel: React.ForwardRefExoticComponent<
     </Card>
   );
 });
+
+function ValidationIssueList({ issues }: { issues: DeclarationConfigValidationIssue[] }) {
+  return (
+    <div style={{ maxHeight: 320, overflow: "auto" }}>
+      {issues.slice(0, 30).map((issue, index) => (
+        <div key={`${issue.path}_${index}`} style={{ marginBottom: 6 }}>
+          <code>{issue.path}</code>
+          <span style={{ marginLeft: 8 }}>{issue.message}</span>
+        </div>
+      ))}
+      {issues.length > 30 ? (
+        <div style={{ color: "rgba(0,0,0,0.45)" }}>还有 {issues.length - 30} 条未显示</div>
+      ) : null}
+    </div>
+  );
+}

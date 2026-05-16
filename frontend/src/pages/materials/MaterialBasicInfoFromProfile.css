@@ -1,3 +1,35 @@
 .materialBasicInfoFromProfile {
   width: 100%;
 }
+
+.materialProfileTable {
+  display: grid;
+  width: 100%;
+  border-top: 1px solid #1f1f1f;
+  border-left: 1px solid #1f1f1f;
+  background: #fff;
+}
+
+.materialProfileTableLabel,
+.materialProfileTableValue {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  border-right: 1px solid #1f1f1f;
+  border-bottom: 1px solid #1f1f1f;
+}
+
+.materialProfileTableLabel {
+  justify-content: center;
+  padding: 6px 8px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.materialProfileTableValue {
+  min-width: 0;
+  padding: 6px 8px;
+  line-height: 1.35;
+  word-break: break-word;
+}

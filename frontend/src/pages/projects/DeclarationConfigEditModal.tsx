@@ -118,6 +118,7 @@ function DeclarationConfigEditModalSession({
   const previewConfig = useMemo(() => {
     try {
       return formValuesToConfig({
+        profileBinding: initialValues?.profileBinding ?? { enabled: false, fields: [] },
         modules: (modulesWatch ?? []) as DeclarationFormValues["modules"],
       });
     } catch {

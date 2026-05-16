@@ -1,14 +1,14 @@
 """add survey response table
 
 Revision ID: 012
-Revises: 011
+Revises: 011_survey_template_and_versions
 Create Date: 2026-04-16
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "012"
-down_revision = "011"
+down_revision = "011_survey_template_and_versions"
 branch_labels = None
 depends_on = None
 

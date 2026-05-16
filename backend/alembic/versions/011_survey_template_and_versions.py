@@ -1,7 +1,7 @@
 """survey template and versions
 
 Revision ID: 011_survey_template_and_versions
-Revises: 010_user_profile_version_and_material_profile_version
+Revises: 010_user_profile_version
 Create Date: 2026-04-14
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "011_survey_template_and_versions"
-down_revision = "010_user_profile_version_and_material_profile_version"
+down_revision = "010_user_profile_version"
 branch_labels = None
 depends_on = None
 
@@ -45,4 +45,3 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("survey_template_version")
     op.drop_table("survey_template")
-

@@ -1,35 +1,50 @@
 from fastapi import APIRouter
 
 from app.api import (
+    admin_dashboard,
+    audit_logs,
     approval_flow_config,
     approvals,
     attachments,
     auth,
     data_dict,
     declaration_config,
+    declaration_config_templates,
+    help_center,
     materials,
     module_config,
+    notifications,
     profile_versions,
     profile_files,
+    profile_field_catalog,
     projects,
     rbac,
     templates,
     survey_templates,
     survey_public,
+    teacher_workbench,
     users,
 )
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
+api_router.include_router(admin_dashboard.router, tags=["Admin dashboard"])
+api_router.include_router(audit_logs.router, tags=["Audit logs"])
 api_router.include_router(users.router, prefix="/users", tags=["Users"])
 api_router.include_router(module_config.router, prefix="/users", tags=["User module config"])
 api_router.include_router(profile_files.router, tags=["Profile files"])
 api_router.include_router(profile_versions.router, tags=["Profile versions"])
 api_router.include_router(rbac.router, prefix="/rbac", tags=["RBAC"])
 api_router.include_router(data_dict.router, prefix="/system", tags=["Data dict"])
+api_router.include_router(profile_field_catalog.router, tags=["Profile field catalog"])
+api_router.include_router(help_center.router, tags=["Help center"])
+api_router.include_router(notifications.router, tags=["Notifications"])
 api_router.include_router(projects.router, prefix="/projects", tags=["Projects"])
 api_router.include_router(
     declaration_config.router, prefix="/projects", tags=["Project declaration config"]
+)
+api_router.include_router(
+    declaration_config_templates.router, tags=["Declaration config templates"]
 )
 api_router.include_router(
     approval_flow_config.router, prefix="/projects", tags=["Project approval flow config"]
@@ -40,3 +55,4 @@ api_router.include_router(approvals.router, prefix="/approvals", tags=["Approval
 api_router.include_router(templates.router, prefix="/templates", tags=["Templates"])
 api_router.include_router(survey_templates.router, prefix="/survey", tags=["Survey templates"])
 api_router.include_router(survey_public.router, prefix="/survey", tags=["Survey public"])
+api_router.include_router(teacher_workbench.router, tags=["Teacher workbench"])

@@ -10,6 +10,11 @@ _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "mysql+pymysql://root:password@localhost:3306/info_flow"
+    DB_CONNECT_TIMEOUT_SECONDS: int = 5
+    DB_READ_TIMEOUT_SECONDS: int = 30
+    DB_WRITE_TIMEOUT_SECONDS: int = 30
+    DB_POOL_TIMEOUT_SECONDS: int = 10
+    DB_POOL_RECYCLE_SECONDS: int = 1800
     SECRET_KEY: str = "your-secret-key-change-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     UPLOAD_DIR: str = "./uploads"
@@ -18,7 +23,7 @@ class Settings(BaseSettings):
     SUPERUSER_USERNAME: str | None = None
 
     class Config:
-        env_file = ".env"
+        env_file = _BACKEND_ROOT / ".env"
 
     @model_validator(mode="after")
     def resolve_upload_dir(self) -> "Settings":

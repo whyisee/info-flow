@@ -29,6 +29,28 @@ class DeclarationConfigUpdate(BaseModel):
     config: Optional[dict[str, Any]] = None
 
 
+class DeclarationConfigValidateRequest(BaseModel):
+    config: dict[str, Any]
+
+
+class DeclarationConfigCopyFromProjectRequest(BaseModel):
+    source_project_id: int
+    source_config_id: Optional[int] = None
+    label: Optional[str] = Field(None, max_length=200)
+
+
+class DeclarationConfigValidationIssue(BaseModel):
+    level: str
+    path: str
+    message: str
+
+
+class DeclarationConfigValidationResult(BaseModel):
+    valid: bool
+    errors: list[DeclarationConfigValidationIssue] = Field(default_factory=list)
+    warnings: list[DeclarationConfigValidationIssue] = Field(default_factory=list)
+
+
 class DeclarationConfigOut(BaseModel):
     id: int
     project_id: int

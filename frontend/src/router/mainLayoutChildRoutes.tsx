@@ -5,9 +5,11 @@ import type { RouteObject } from "react-router-dom";
 import Dashboard from "../pages/Dashboard";
 import ProjectList from "../pages/projects/ProjectList";
 import ProjectDeclarationConfig from "../pages/projects/ProjectDeclarationConfig";
+import DeclarationConfigTemplateLibrary from "../pages/projects/DeclarationConfigTemplateLibrary";
 import ProjectApprovalFlowConfig from "../pages/projects/ProjectApprovalFlowConfig";
 import MaterialList from "../pages/materials/MaterialList";
 import MaterialForm from "../pages/materials/MaterialForm";
+import MaterialPrintPreviewPage from "../pages/materials/MaterialPrintPreviewPage";
 import ApprovalCenterPage from "../pages/approvals/ApprovalCenterPage";
 import ApprovalProcessPage from "../pages/approvals/ApprovalProcessPage";
 import TemplateList from "../pages/templates/TemplateList";
@@ -16,7 +18,6 @@ import UserList from "../pages/users/UserList";
 import SurveyHome from "../pages/survey/SurveyHome";
 import SurveyDesign from "../pages/survey/SurveyDesign";
 import SurveyDesignList from "../pages/survey/SurveyDesignList";
-import SurveyFill from "../pages/survey/SurveyFill";
 import SurveyExport from "../pages/survey/SurveyExport";
 import SystemSettings from "../pages/system/SystemSettings";
 import DictMaintenance from "../pages/system/DictMaintenance";
@@ -24,6 +25,11 @@ import DictTypeItemsPage from "../pages/system/DictTypeItemsPage";
 import PermissionCatalog from "../pages/system/PermissionCatalog";
 import RolePermissionList from "../pages/system/RolePermissionList";
 import RolePermissionEdit from "../pages/system/RolePermissionEdit";
+import ProfileFieldCatalogPage from "../pages/system/ProfileFieldCatalogPage";
+import HelpCenter from "../pages/help/HelpCenter";
+import TeacherWorkbench from "../pages/teacher/TeacherWorkbench";
+import AdminDashboard from "../pages/admin/AdminDashboard";
+import AuditLogPage from "../pages/admin/AuditLogPage";
 
 const ProjectApprovalFlowEdit = lazy(() => import("../pages/projects/ProjectApprovalFlowEdit"));
 
@@ -40,6 +46,9 @@ const approvalFlowEditFallback = (
 export const mainLayoutChildRoutes: RouteObject[] = [
   { index: true, element: <Navigate to="/declaration/dashboard" replace /> },
   { path: "declaration/dashboard", element: <Dashboard /> },
+  { path: "declaration/admin-dashboard", element: <AdminDashboard /> },
+  { path: "declaration/audit-logs", element: <AuditLogPage /> },
+  { path: "teacher/workbench", element: <TeacherWorkbench /> },
   { path: "declaration/profile", element: <ProfileBasic /> },
   { path: "declaration/projects", element: <ProjectList /> },
   {
@@ -64,9 +73,11 @@ export const mainLayoutChildRoutes: RouteObject[] = [
     element: <Navigate to="/declaration/approvals" replace />,
   },
   { path: "declaration/materials/new", element: <MaterialForm /> },
+  { path: "declaration/materials/:id/preview", element: <MaterialPrintPreviewPage /> },
   { path: "declaration/materials/:id", element: <MaterialForm /> },
   { path: "declaration/approvals", element: <ApprovalCenterPage /> },
   { path: "declaration/approvals/process/:materialId", element: <ApprovalProcessPage /> },
+  { path: "declaration/config-templates", element: <DeclarationConfigTemplateLibrary /> },
   { path: "declaration/templates", element: <TemplateList /> },
   { path: "survey", element: <SurveyHome /> },
   { path: "survey/design", element: <SurveyDesignList /> },
@@ -83,4 +94,6 @@ export const mainLayoutChildRoutes: RouteObject[] = [
   { path: "system/settings", element: <SystemSettings /> },
   { path: "system/dict/:typeCode/items", element: <DictTypeItemsPage /> },
   { path: "system/dict", element: <DictMaintenance /> },
+  { path: "system/profile-fields", element: <ProfileFieldCatalogPage /> },
+  { path: "help", element: <HelpCenter /> },
 ];

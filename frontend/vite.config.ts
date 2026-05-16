@@ -8,6 +8,8 @@ export default defineConfig({
     dedupe: ["dayjs"],
   },
   server: {
+    /** 避免仅绑定 IPv6(::1) 时 http://127.0.0.1:端口 无法访问 */
+    host: true,
     port: 5173,
     allowedHosts: ["if.oniao-ai.com"],
     proxy: {

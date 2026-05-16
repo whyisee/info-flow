@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const TOC_ITEMS: { id: string; label: string }[] = [
-  { id: "profile-section-basic", label: "基本信息" },
-  { id: "profile-section-tasks", label: "任务与关键词" },
-  { id: "profile-section-contact", label: "联系方式" },
-  { id: "profile-section-supervisors", label: "导师与回避" },
-];
+import type { ProfileTocItem } from "./profileTocItems";
 
 const SCROLL_ROOT_SELECTOR = ".mainOutletWrap";
 
@@ -18,15 +13,16 @@ function getScrollRoot(): HTMLElement | null {
  * （解决最后一节标题已进入视口但顶边仍在中线下方时仍高亮上一节的问题）。
  * 若无任何标题与滚动区相交（大段正文间隙），回退为「顶边 ≤ 中线」的最后一节。
  */
-function computeActiveSection(): string {
+function computeActiveSection(items: ProfileTocItem[]): string | null {
+  if (items.length === 0) return null;
   const root = getScrollRoot();
-  if (!root) return TOC_ITEMS[0].id;
+  if (!root) return items[0].id;
   const rootRect = root.getBoundingClientRect();
   const centerY = rootRect.top + rootRect.height / 2;
 
   let bestIdx = -1;
   let bestDist = Infinity;
-  TOC_ITEMS.forEach((item, i) => {
+  items.forEach((item, i) => {
     const el = document.getElementById(item.id);
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -38,10 +34,10 @@ function computeActiveSection(): string {
       bestIdx = i;
     }
   });
-  if (bestIdx >= 0) return TOC_ITEMS[bestIdx].id;
+  if (bestIdx >= 0) return items[bestIdx].id;
 
-  let active = TOC_ITEMS[0].id;
-  for (const { id } of TOC_ITEMS) {
+  let active = items[0].id;
+  for (const { id } of items) {
     const el = document.getElementById(id);
     if (!el) continue;
     if (el.getBoundingClientRect().top <= centerY) active = id;
@@ -49,9 +45,13 @@ function computeActiveSection(): string {
   return active;
 }
 
-export default function ProfileToc() {
-  const [activeId, setActiveId] = useState<string>(TOC_ITEMS[0].id);
+export default function ProfileToc({ items }: { items: ProfileTocItem[] }) {
+  const [activeId, setActiveId] = useState<string | null>(items[0]?.id ?? null);
   const rafRef = useRef<number | null>(null);
+  const currentActiveId =
+    activeId && items.some((item) => item.id === activeId)
+      ? activeId
+      : items[0]?.id ?? null;
 
   const go = useCallback((id: string) => {
     const el = document.getElementById(id);
@@ -60,12 +60,13 @@ export default function ProfileToc() {
   }, []);
 
   useEffect(() => {
+    if (items.length === 0) return undefined;
     const root = getScrollRoot();
     if (!root) return undefined;
 
     const tick = () => {
       rafRef.current = null;
-      setActiveId(computeActiveSection());
+      setActiveId(computeActiveSection(items));
     };
 
     const onScroll = () => {
@@ -86,21 +87,23 @@ export default function ProfileToc() {
       ro.disconnect();
       if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current);
     };
-  }, []);
+  }, [items]);
+
+  if (items.length === 0) return null;
 
   return (
     <nav className="profileToc" aria-label="本页目录">
       <ul className="profileTocList">
-        {TOC_ITEMS.map((item) => (
+        {items.map((item) => (
           <li key={item.id}>
             <button
               type="button"
               className={
-                item.id === activeId
+                item.id === currentActiveId
                   ? "profileTocLink profileTocLinkActive"
                   : "profileTocLink"
               }
-              aria-current={item.id === activeId ? "location" : undefined}
+              aria-current={item.id === currentActiveId ? "location" : undefined}
               onClick={() => go(item.id)}
             >
               {item.label}

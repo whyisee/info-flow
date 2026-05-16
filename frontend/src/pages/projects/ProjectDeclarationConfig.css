@@ -16,6 +16,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
   margin-bottom: 18px;
   margin-top: 0;
   padding-top: 8px;
@@ -33,6 +34,7 @@
   gap: 10px;
   flex-wrap: wrap;
   min-width: 0;
+  flex: 1 1 360px;
 }
 
 .projectDeclarationPageTitle {
@@ -48,7 +50,7 @@
 .projectDeclarationPageTitlePrimary {
   font-size: 17px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -56,7 +58,41 @@
 }
 
 .projectDeclarationPageActions {
-  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+  flex: 1 1 520px;
+  row-gap: 8px;
+}
+
+.projectDeclarationVersionSelect {
+  width: 220px;
+  max-width: min(220px, 100%);
+}
+
+.projectDeclarationActionTip {
+  display: inline-flex;
+}
+
+.projectDeclarationIconButton {
+  width: 32px;
+  padding-inline: 0;
+}
+
+@media (max-width: 920px) {
+  .projectDeclarationPageHeader {
+    align-items: flex-start;
+  }
+
+  .projectDeclarationPageActions {
+    justify-content: flex-start;
+    flex-basis: 100%;
+  }
+
+  .projectDeclarationVersionSelect {
+    flex: 1 1 180px;
+    width: auto;
+  }
 }
 
 .projectDeclarationConfigModal .ant-modal-body {
@@ -71,4 +107,58 @@
 
 .projectDeclarationConfigEditor {
   width: 100%;
+}
+
+.projectDeclarationValidationIssues {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.projectDeclarationValidationIssue {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 200px) 1fr;
+  align-items: start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #1f2937;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.projectDeclarationValidationIssuePath {
+  color: #6b7280;
+  word-break: break-all;
+}
+
+.projectDeclarationTemplateFormRow {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.projectDeclarationTemplateFormRow > span {
+  color: #374151;
+  font-size: 13px;
+}
+
+.projectDeclarationTemplateFormRowBlock {
+  align-items: start;
+}
+
+.projectDeclarationTemplateFormRowBlock > span {
+  padding-top: 6px;
+}
+
+.projectDeclarationCompareRisks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }

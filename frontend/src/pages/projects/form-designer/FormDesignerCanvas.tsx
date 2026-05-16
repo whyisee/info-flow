@@ -91,7 +91,7 @@ export function FormDesignerCanvas({
     const title = (node as any).title as string | undefined;
     if (title) return title;
     if (fieldType) return FIELD_META[fieldType]?.label || fieldType;
-    return node.name || "未命名";
+    return node.kind === "Field" || node.kind === "Repeater" ? node.name : "未命名";
   };
 
   const nodeIcon = (node: FormNode) => {
@@ -102,11 +102,6 @@ export function FormDesignerCanvas({
   const nodeColor = (node: FormNode) => {
     const fieldType = (node as any).fieldType as string | undefined;
     return fieldType ? FIELD_META[fieldType]?.color : "#595959";
-  };
-
-  const nodeTypeLabel = (node: FormNode) => {
-    const fieldType = (node as any).fieldType as string | undefined;
-    return fieldType ? FIELD_META[fieldType]?.label : null;
   };
 
   const getFieldDef = (node: FormNode): FieldDef | null => {

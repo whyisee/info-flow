@@ -84,7 +84,7 @@ function LaneFormFields({
             allowClear
             showSearch
             optionFilterProp="label"
-            placeholder="不选则发布后走角色"
+            placeholder="请选择审批人"
             options={options}
             value={lane.assignee_user_ids}
             onChange={(v) => onChange({ assignee_user_ids: v })}
@@ -256,7 +256,7 @@ export function ApprovalFlowInspector({
                 allowClear
                 showSearch
                 optionFilterProp="label"
-                placeholder="不选则发布后走角色"
+                placeholder="请选择审批人"
                 options={approverOptions.map((u) => ({
                   value: u.id,
                   label: `${u.name}（${u.username} · ${u.role}）`,

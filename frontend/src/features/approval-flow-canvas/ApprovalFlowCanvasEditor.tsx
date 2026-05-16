@@ -71,6 +71,7 @@ export type ApprovalFlowCanvasHandle = {
 type BodyProps = {
   defaultSteps: ApprovalStepDraft[]
   approverOptions: ApproverOption[]
+  readOnly?: boolean
 }
 
 function countsTowardWorkflowCap(n: Node): boolean {
@@ -89,7 +90,7 @@ function newNodeId(prefix: string): string {
 }
 
 const CanvasBody = forwardRef<ApprovalFlowCanvasHandle, BodyProps>(
-  function CanvasBody({ defaultSteps, approverOptions }, ref) {
+  function CanvasBody({ defaultSteps, approverOptions, readOnly = false }, ref) {
     const initial = useMemo(() => layoutFromSteps(defaultSteps), [defaultSteps])
     const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes)
     const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges)
@@ -294,19 +295,19 @@ const CanvasBody = forwardRef<ApprovalFlowCanvasHandle, BodyProps>(
     return (
       <ApprovalFlowCanvasUiProvider value={uiCtxValue}>
         <div className="approvalFlowCanvas afcWorkbench">
-          <ApprovalFlowNodePalette onRelayout={handleRelayout} onFitView={handleFitView} />
+          {readOnly ? null : <ApprovalFlowNodePalette onRelayout={handleRelayout} onFitView={handleFitView} />}
           <div className="afcCanvasWrap">
             <ReactFlow
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
+              onConnect={readOnly ? undefined : onConnect}
               isValidConnection={isValidConnection}
-              onNodeDragStop={onNodeDragStop}
+              onNodeDragStop={readOnly ? undefined : onNodeDragStop}
               onSelectionChange={onSelectionChange}
-              onDrop={onDrop}
-              onDragOver={onDragOver}
+              onDrop={readOnly ? undefined : onDrop}
+              onDragOver={readOnly ? undefined : onDragOver}
               nodeTypes={nodeTypes}
               onInit={(inst) => {
                 rfRef.current = inst
@@ -315,8 +316,8 @@ const CanvasBody = forwardRef<ApprovalFlowCanvasHandle, BodyProps>(
                   inst.fitView({ padding: 0.15, duration: 200 })
                 }
               }}
-              nodesDraggable
-              nodesConnectable
+              nodesDraggable={!readOnly}
+              nodesConnectable={!readOnly}
               elementsSelectable
               panOnScroll
               zoomOnScroll

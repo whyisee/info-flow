@@ -11,7 +11,6 @@ import {
   Radio,
   Rate,
   Select,
-  Slider,
   Space,
   Switch,
   TreeSelect,
@@ -305,7 +304,6 @@ function renderField(
     case "image": {
       const accept = fd?.attachment?.accept;
       const maxSize = fd?.attachment?.maxSize;
-      const maxCount = fd?.attachment?.maxCount ?? 5;
       // value = [{ fileName, filePath }] 或 undefined
       const currentFiles = (Array.isArray(value) ? value : []) as { fileName: string; filePath: string }[];
       const fileList = currentFiles.map((f: { fileName: string; filePath: string }, i: number) => ({

@@ -53,6 +53,14 @@ type ProjectAppliedFilter = {
   startTo: Dayjs | null
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+    if (typeof detail === 'string' && detail.trim()) return detail
+  }
+  return fallback
+}
+
 function projectMatchesFilter(row: Project, f: ProjectAppliedFilter): boolean {
   if (f.project_status !== 'all' && row.status !== Number(f.project_status)) return false
   const kw = f.keyword.trim().toLowerCase()
@@ -190,8 +198,8 @@ export default function ProjectList() {
       await projectService.updateProject(id, { status })
       message.success(okText)
       fetchProjects()
-    } catch {
-      message.error('操作失败')
+    } catch (error) {
+      message.error(errorMessage(error, '操作失败'))
     }
   }
 

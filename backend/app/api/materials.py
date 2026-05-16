@@ -5,21 +5,44 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import String, delete, func, select
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.deps import CurrentUser, DbSession, get_active_role_code
 from app.core.rbac_service import get_effective_legacy_role
+from app.models.approval import ApproveRecord
 from app.models.attachment import FileAttachment
 from app.models.data_dict import DataDictItem, DataDictType
 from app.models.material import ApplyMaterial
+from app.models.material_experience import (
+    ApprovalCommentAnchor,
+    MaterialDraftSnapshot,
+    MaterialValidationIssue,
+)
 from app.models.project import ApplyProject
 from app.models.project_declaration_config import ProjectDeclarationConfig
 from app.models.user import User
 from app.models.user_module_config import UserModuleConfig
 from app.models.user_profile_version import UserProfileVersion
 from app.config import get_settings
-from app.schemas.material import MaterialCreate, MaterialOut, MaterialUpdate
-from app.schemas.project import parse_project_flow
+from app.schemas.material import (
+    MaterialCreate,
+    MaterialDraftSaveRequest,
+    MaterialDraftSaveResult,
+    MaterialEditContext,
+    MaterialOut,
+    MaterialReturnCommentOut,
+    MaterialReturnCommentResolveRequest,
+    MaterialUpdate,
+    MaterialValidationIssueOut,
+    MaterialValidationRequest,
+    MaterialValidationResult,
+)
+from app.schemas.project import ApprovalStepLinear, ApprovalStepParallel, parse_project_flow
+from app.services.approval_assignee_resolution import (
+    explain_assignee_resolution_failure,
+    resolve_lane_assignees,
+)
 from app.services.approval_flow_display import build_flow_step_displays
 from app.services.project_effective_approval_flow import get_effective_project_flow_dict
 from app.services.profile_version_service import (
@@ -43,8 +66,313 @@ def _snapshot_display(db, material: ApplyMaterial):
 
 def _material_to_out(db, material: ApplyMaterial) -> MaterialOut:
     disp = _snapshot_display(db, material)
+    creator = db.get(User, material.user_id)
     base = MaterialOut.model_validate(material)
-    return base.model_copy(update={"approval_snapshot_display": disp})
+    creator_name = (creator.name or creator.username) if creator else None
+    return base.model_copy(update={"approval_snapshot_display": disp, "creator_name": creator_name})
+
+
+def _get_material_for_teacher(db, material_id: int, current_user: User) -> ApplyMaterial:
+    material = db.get(ApplyMaterial, material_id)
+    if not material:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="材料不存在")
+    if material.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限")
+    return material
+
+
+def _get_material_for_active_role(
+    db,
+    material_id: int,
+    current_user: User,
+    active_role: str | None,
+) -> ApplyMaterial:
+    material = db.get(ApplyMaterial, material_id)
+    if not material:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="材料不存在")
+    eff = get_effective_legacy_role(db, current_user, active_role)
+    if eff == "teacher" and material.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限")
+    return material
+
+
+def _get_active_decl_config(db, project_id: int) -> tuple[dict | None, int | None]:
+    row = db.execute(
+        select(ProjectDeclarationConfig)
+        .where(
+            ProjectDeclarationConfig.project_id == project_id,
+            ProjectDeclarationConfig.status == "published",
+        )
+        .order_by(ProjectDeclarationConfig.version.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if not row:
+        return None, None
+    return row.config if isinstance(row.config, dict) else {"modules": []}, row.version
+
+
+def _as_comparable_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _assert_project_accepting_materials(project: ApplyProject | None) -> ApplyProject:
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+    if project.status != 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="项目尚未发布或已关闭，无法申报")
+    now = datetime.now(timezone.utc)
+    if _as_comparable_utc(project.start_time) > now:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="项目尚未开始，暂不能申报")
+    if _as_comparable_utc(project.end_time) < now:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="项目已截止，无法申报")
+    return project
+
+
+def _is_empty_value(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() == ""
+    if isinstance(value, (list, tuple, set, dict)):
+        return len(value) == 0
+    return False
+
+
+def _issue_out(
+    message: str,
+    *,
+    module_key: str | None = None,
+    section_key: str | None = None,
+    field_key: str | None = None,
+    attachment_key: str | None = None,
+    level: str = "error",
+    issue_type: str = "required",
+) -> MaterialValidationIssueOut:
+    return MaterialValidationIssueOut(
+        moduleKey=module_key,
+        sectionKey=section_key,
+        fieldKey=field_key,
+        attachmentKey=attachment_key,
+        level=level,
+        issueType=issue_type,
+        message=message,
+        resolved=False,
+    )
+
+
+def _normalize_sections(sub: dict) -> list[dict]:
+    raw = sub.get("sections")
+    if isinstance(raw, list):
+        return [x for x in raw if isinstance(x, dict)]
+    sections: list[dict] = []
+    if isinstance(sub.get("map"), dict):
+        sections.append({"key": "map_0", "kind": "map", **sub["map"]})
+    if isinstance(sub.get("list"), dict):
+        sections.append({"key": "list_0", "kind": "list", **sub["list"]})
+    if sections:
+        return sections
+    return [{"key": "__default", "kind": "list" if sub.get("type") == "list" else "map", **sub}]
+
+
+def _validate_material_content(config: dict | None, content: dict) -> MaterialValidationResult:
+    errors: list[MaterialValidationIssueOut] = []
+    total_required = 0
+    done_required = 0
+
+    cfg = config if isinstance(config, dict) else {"modules": []}
+    profile_binding = cfg.get("profileBinding")
+    if isinstance(profile_binding, dict) and profile_binding.get("enabled") is not False:
+        fields = profile_binding.get("fields")
+        if isinstance(fields, list):
+            for raw in fields:
+                if not isinstance(raw, dict) or raw.get("required_in_project") is not True:
+                    continue
+                key = raw.get("field_key")
+                if not isinstance(key, str) or not key:
+                    continue
+                total_required += 1
+                if _is_empty_value(content.get(key)):
+                    label = raw.get("visible_label") if isinstance(raw.get("visible_label"), str) else key
+                    errors.append(
+                        _issue_out(f"请先完善基本信息：{label}", field_key=key)
+                    )
+                else:
+                    done_required += 1
+
+    declaration = content.get("declaration")
+    draft = declaration if isinstance(declaration, dict) else {}
+    draft_modules = draft.get("modules") if isinstance(draft.get("modules"), dict) else {}
+    modules = cfg.get("modules") if isinstance(cfg.get("modules"), list) else []
+    for mi, mod in enumerate([m for m in modules if isinstance(m, dict)]):
+        module_key = mod.get("key") if isinstance(mod.get("key"), str) else f"module_{mi}"
+        subs = mod.get("subModules") if isinstance(mod.get("subModules"), list) else []
+        for si, sub in enumerate([s for s in subs if isinstance(s, dict)]):
+            sub_key = sub.get("key") if isinstance(sub.get("key"), str) else f"sub_{si}"
+            sub_draft = (
+                draft_modules.get(module_key, {}).get(sub_key, {})
+                if isinstance(draft_modules.get(module_key), dict)
+                else {}
+            )
+            for idx, sec in enumerate(_normalize_sections(sub)):
+                section_key = sec.get("key") if isinstance(sec.get("key"), str) else f"sec_{idx}"
+                sec_draft = sub_draft.get(section_key, {}) if isinstance(sub_draft, dict) else {}
+                kind = sec.get("kind")
+                if kind == "map":
+                    map_values = sec_draft.get("map", {}) if isinstance(sec_draft, dict) else {}
+                    map_values = map_values if isinstance(map_values, dict) else {}
+                    for raw_field in sec.get("fields") if isinstance(sec.get("fields"), list) else []:
+                        if not isinstance(raw_field, dict) or raw_field.get("required") is not True:
+                            continue
+                        name = raw_field.get("name")
+                        if not isinstance(name, str) or not name:
+                            continue
+                        total_required += 1
+                        if _is_empty_value(map_values.get(name)):
+                            label = raw_field.get("label") if isinstance(raw_field.get("label"), str) else name
+                            errors.append(
+                                _issue_out(
+                                    f"请填写必填项：{label}",
+                                    module_key=module_key,
+                                    section_key=section_key,
+                                    field_key=name,
+                                )
+                            )
+                        else:
+                            done_required += 1
+                    for ai, raw_att in enumerate(sec.get("attachments") if isinstance(sec.get("attachments"), list) else []):
+                        if not isinstance(raw_att, dict) or raw_att.get("required") is not True:
+                            continue
+                        key = raw_att.get("key") if isinstance(raw_att.get("key"), str) else f"att_{ai}"
+                        total_required += 1
+                        attachments = map_values.get("__attachments")
+                        files = attachments.get(key) if isinstance(attachments, dict) else []
+                        if not isinstance(files, list) or not files:
+                            label = raw_att.get("label") if isinstance(raw_att.get("label"), str) else key
+                            errors.append(
+                                _issue_out(
+                                    f"请上传必填附件：{label}",
+                                    module_key=module_key,
+                                    section_key=section_key,
+                                    attachment_key=key,
+                                    issue_type="attachment",
+                                )
+                            )
+                        else:
+                            done_required += 1
+
+    completion = 100 if total_required == 0 else round(done_required * 100 / total_required)
+    return MaterialValidationResult(
+        valid=len(errors) == 0,
+        completion=completion,
+        errors=errors,
+        warnings=[],
+    )
+
+
+def _persist_validation_issues(db, material_id: int, result: MaterialValidationResult) -> None:
+    db.execute(delete(MaterialValidationIssue).where(MaterialValidationIssue.material_id == material_id))
+    for issue in [*result.errors, *result.warnings]:
+        db.add(
+            MaterialValidationIssue(
+                material_id=material_id,
+                module_key=issue.moduleKey,
+                section_key=issue.sectionKey,
+                field_key=issue.fieldKey,
+                attachment_key=issue.attachmentKey,
+                level=issue.level,
+                issue_type=issue.issueType,
+                message=issue.message,
+                resolved=issue.resolved,
+            )
+        )
+
+
+def _next_snapshot_version(db, material_id: int) -> int:
+    max_v = db.execute(
+        select(func.coalesce(func.max(MaterialDraftSnapshot.version), 0)).where(
+            MaterialDraftSnapshot.material_id == material_id
+        )
+    ).scalar()
+    return int(max_v) + 1
+
+
+def _material_step_count(material: ApplyMaterial) -> int:
+    snapshot = material.approval_snapshot
+    steps = snapshot.get("steps") if isinstance(snapshot, dict) else None
+    return len(steps) if isinstance(steps, list) and len(steps) > 0 else 3
+
+
+def _material_workflow_status(material: ApplyMaterial) -> str:
+    raw = getattr(material, "workflow_status", None)
+    if isinstance(raw, str) and raw:
+        return raw
+    if material.status == 0:
+        return "draft"
+    if material.status == 5:
+        return "rejected"
+    if material.status == _material_step_count(material) + 1:
+        return "approved"
+    return "reviewing"
+
+
+def _is_material_in_review(material: ApplyMaterial) -> bool:
+    return _material_workflow_status(material) == "reviewing"
+
+
+def _is_material_editable(material: ApplyMaterial) -> bool:
+    return _material_workflow_status(material) in {"draft", "returned", "rejected", "cancelled"}
+
+
+def _assert_flow_resolves_assignees(db, material: ApplyMaterial, flow) -> None:
+    for idx, step in enumerate(flow.steps):
+        if isinstance(step, ApprovalStepLinear):
+            if not resolve_lane_assignees(db, step, material.user_id):
+                reason = explain_assignee_resolution_failure(db, step, material.user_id)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"审批流程第 {idx + 1} 环节「{step.title}」未解析到审批人："
+                        f"{reason}。请调整项目审批流画布配置，或先在用户管理中维护对应用户的角色/部门。"
+                    ),
+                )
+            continue
+        if isinstance(step, ApprovalStepParallel):
+            for lane_idx, lane in enumerate(step.lanes):
+                if not resolve_lane_assignees(db, lane, material.user_id):
+                    reason = explain_assignee_resolution_failure(db, lane, material.user_id)
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            f"审批流程第 {idx + 1} 环节「{step.title}」"
+                            f"的子轨 {lane_idx + 1}「{lane.title}」未解析到审批人："
+                            f"{reason}。请调整项目审批流画布配置，或先在用户管理中维护对应用户的角色/部门。"
+                        ),
+                    )
+
+
+def _return_comment_out(
+    rec: ApproveRecord,
+    approver_name: str | None,
+    anchor: ApprovalCommentAnchor | None,
+) -> MaterialReturnCommentOut:
+    return MaterialReturnCommentOut(
+        id=anchor.id if anchor else rec.id,
+        approveRecordId=rec.id,
+        materialId=rec.material_id,
+        approverId=rec.approver_id,
+        approverName=approver_name,
+        action="return" if rec.status == 2 else "reject",
+        comment=anchor.comment if anchor and anchor.comment is not None else rec.comment,
+        moduleKey=anchor.module_key if anchor else None,
+        sectionKey=anchor.section_key if anchor else None,
+        fieldKey=anchor.field_key if anchor else None,
+        rowKey=anchor.row_key if anchor else None,
+        attachmentKey=anchor.attachment_key if anchor else None,
+        resolved=bool(anchor.resolved) if anchor else False,
+        createdAt=rec.created_at,
+    )
 
 
 @router.get("/", response_model=list[MaterialOut])
@@ -52,17 +380,49 @@ def list_materials(
     db: DbSession,
     current_user: CurrentUser,
     active_role: ActiveRoleCode,
+    keyword: str | None = None,
+    project_id: int | None = None,
+    status_filter: str | None = None,
 ):
-    query = select(ApplyMaterial)
+    query = select(ApplyMaterial).join(ApplyProject, ApplyProject.id == ApplyMaterial.project_id)
     eff = get_effective_legacy_role(db, current_user, active_role)
     if eff == "teacher":
         query = query.where(ApplyMaterial.user_id == current_user.id)
+    if project_id is not None:
+        query = query.where(ApplyMaterial.project_id == project_id)
+    if keyword and keyword.strip():
+        kw = f"%{keyword.strip()}%"
+        query = query.where(
+            ApplyProject.name.ilike(kw)
+            | ApplyProject.description.ilike(kw)
+            | func.cast(ApplyMaterial.id, String).ilike(kw)
+        )
+    if status_filter and status_filter != "all":
+        if status_filter not in ("in", "done"):
+            try:
+                status_number = int(status_filter)
+                if status_number == 0:
+                    query = query.where(ApplyMaterial.workflow_status.in_(["draft", "cancelled"]))
+                elif status_number == 5:
+                    query = query.where(ApplyMaterial.workflow_status.in_(["returned", "rejected"]))
+                else:
+                    query = query.where(ApplyMaterial.status == status_number)
+            except ValueError:
+                pass
+    query = query.order_by(ApplyMaterial.created_at.desc(), ApplyMaterial.id.desc())
     materials = db.execute(query).scalars().all()
+    if status_filter in ("in", "done"):
+        if status_filter == "done":
+            materials = [m for m in materials if _material_workflow_status(m) == "approved"]
+        else:
+            materials = [m for m in materials if _is_material_in_review(m)]
     return [_material_to_out(db, m) for m in materials]
 
 
 @router.post("/", response_model=MaterialOut, status_code=status.HTTP_201_CREATED)
 def create_material(data: MaterialCreate, db: DbSession, current_user: CurrentUser):
+    _assert_project_accepting_materials(db.get(ApplyProject, data.project_id))
+
     existing = db.execute(
         select(ApplyMaterial).where(
             ApplyMaterial.user_id == current_user.id,
@@ -93,6 +453,154 @@ def get_material(
     if eff == "teacher" and material.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限")
     return _material_to_out(db, material)
+
+
+@router.get("/{material_id}/edit-context", response_model=MaterialEditContext)
+def get_material_edit_context(
+    material_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    active_role: ActiveRoleCode,
+):
+    material = _get_material_for_active_role(db, material_id, current_user, active_role)
+    project = db.get(ApplyProject, material.project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+    config, config_version = _get_active_decl_config(db, material.project_id)
+    content = material.content if isinstance(material.content, dict) else {}
+    validation = _validate_material_content(config, content)
+    _persist_validation_issues(db, material.id, validation)
+    db.commit()
+    db.refresh(material)
+    return MaterialEditContext(
+        material=_material_to_out(db, material),
+        project={
+            "id": project.id,
+            "name": project.name,
+            "description": project.description,
+            "start_time": project.start_time,
+            "end_time": project.end_time,
+            "status": project.status,
+        },
+        config=config,
+        configVersion=config_version,
+        draft=content,
+        validation=validation,
+        lastSavedAt=material.updated_at or material.created_at,
+    )
+
+
+@router.put("/{material_id}/draft", response_model=MaterialDraftSaveResult)
+def save_material_draft(
+    material_id: int,
+    data: MaterialDraftSaveRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    material = _get_material_for_teacher(db, material_id, current_user)
+    if not _is_material_editable(material):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前状态不可编辑")
+    material.content = data.data
+    flag_modified(material, "content")
+    config, config_version = _get_active_decl_config(db, material.project_id)
+    version = _next_snapshot_version(db, material_id)
+    db.add(
+        MaterialDraftSnapshot(
+            material_id=material_id,
+            snapshot_type=data.saveType or "autosave",
+            version=version,
+            data_json=data.data,
+            config_version=config_version,
+            created_by=current_user.id,
+        )
+    )
+    validation = _validate_material_content(config, data.data)
+    _persist_validation_issues(db, material_id, validation)
+    db.commit()
+    db.refresh(material)
+    return MaterialDraftSaveResult(
+        materialId=material.id,
+        serverRevision=version,
+        savedAt=material.updated_at or material.created_at,
+    )
+
+
+@router.post("/{material_id}/validate", response_model=MaterialValidationResult)
+def validate_material(
+    material_id: int,
+    data: MaterialValidationRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+    active_role: ActiveRoleCode,
+):
+    material = _get_material_for_active_role(db, material_id, current_user, active_role)
+    config, _ = _get_active_decl_config(db, material.project_id)
+    content = data.data if isinstance(data.data, dict) else material.content
+    content = content if isinstance(content, dict) else {}
+    result = _validate_material_content(config, content)
+    _persist_validation_issues(db, material_id, result)
+    db.commit()
+    return result
+
+
+@router.get("/{material_id}/return-comments", response_model=list[MaterialReturnCommentOut])
+def list_return_comments(
+    material_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    active_role: ActiveRoleCode,
+):
+    material = _get_material_for_active_role(db, material_id, current_user, active_role)
+    rows = db.execute(
+        select(ApproveRecord, User.name)
+        .join(User, User.id == ApproveRecord.approver_id)
+        .where(
+            ApproveRecord.material_id == material.id,
+            ApproveRecord.status.in_([2, 3]),
+        )
+        .order_by(ApproveRecord.created_at.desc())
+    ).all()
+    anchors = db.execute(
+        select(ApprovalCommentAnchor).where(ApprovalCommentAnchor.material_id == material.id)
+    ).scalars().all()
+    anchor_by_record = {a.approve_record_id: a for a in anchors}
+    return [_return_comment_out(rec, name, anchor_by_record.get(rec.id)) for rec, name in rows]
+
+
+@router.put(
+    "/{material_id}/return-comments/{approve_record_id}/resolved",
+    response_model=MaterialReturnCommentOut,
+)
+def resolve_return_comment(
+    material_id: int,
+    approve_record_id: int,
+    data: MaterialReturnCommentResolveRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    material = _get_material_for_teacher(db, material_id, current_user)
+    rec = db.get(ApproveRecord, approve_record_id)
+    if not rec or rec.material_id != material.id or rec.status not in (2, 3):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="退回意见不存在")
+    anchor = db.execute(
+        select(ApprovalCommentAnchor).where(
+            ApprovalCommentAnchor.approve_record_id == approve_record_id
+        )
+    ).scalar_one_or_none()
+    if anchor is None:
+        anchor = ApprovalCommentAnchor(
+            approve_record_id=rec.id,
+            material_id=material.id,
+            comment=rec.comment,
+            resolved=data.resolved,
+        )
+        db.add(anchor)
+    else:
+        anchor.resolved = data.resolved
+    db.commit()
+    db.refresh(anchor)
+    approver = db.get(User, rec.approver_id)
+    return _return_comment_out(rec, approver.name if approver else None, anchor)
 
 
 @router.get("/{material_id}/preview-pdf")
@@ -625,6 +1133,296 @@ def preview_material_pdf(
         )
         return tbl
 
+    page_content_width = A4[0] - 36 * mm
+
+    style_cell = ParagraphStyle(
+        "print_cell",
+        parent=style_body,
+        fontName=font_name,
+        fontSize=9,
+        leading=13,
+        alignment=1,
+    )
+    style_cell_left = ParagraphStyle(
+        "print_cell_left",
+        parent=style_body,
+        fontName=font_name,
+        fontSize=9,
+        leading=13,
+        alignment=0,
+    )
+    style_cell_bold = ParagraphStyle(
+        "print_cell_bold",
+        parent=style_body,
+        fontName=font_name,
+        fontSize=9,
+        leading=13,
+        alignment=1,
+    )
+
+    def _empty_grid(rows: int, cols: int) -> list[list[object]]:
+        return [["" for _ in range(max(1, cols))] for _ in range(max(1, rows))]
+
+    def _span_cell(
+        data: list[list[object]],
+        spans: list[tuple[int, int, int, int]],
+        row: int,
+        col: int,
+        row_span: int,
+        col_span: int,
+        value: object,
+    ) -> None:
+        if not data or row >= len(data) or col >= len(data[0]):
+            return
+        max_row = len(data) - 1
+        max_col = len(data[0]) - 1
+        end_row = min(max_row, row + max(1, row_span) - 1)
+        end_col = min(max_col, col + max(1, col_span) - 1)
+        data[row][col] = value
+        if end_row > row or end_col > col:
+            spans.append((col, row, end_col, end_row))
+
+    def _print_table(
+        data: list[list[object]],
+        spans: list[tuple[int, int, int, int]] | None = None,
+        col_widths: list[float] | None = None,
+        row_heights: list[float] | None = None,
+    ) -> Table:
+        cols = len(data[0]) if data else 1
+        tbl = Table(
+            data or [[""]],
+            colWidths=col_widths or [page_content_width / cols] * cols,
+            rowHeights=row_heights,
+            splitByRow=1,
+        )
+        commands = [
+            ("FONTNAME", (0, 0), (-1, -1), font_name),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("GRID", (0, 0), (-1, -1), 0.75, colors.black),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]
+        for c0, r0, c1, r1 in spans or []:
+            commands.append(("SPAN", (c0, r0), (c1, r1)))
+        tbl.setStyle(TableStyle(commands))
+        return tbl
+
+    def _profile_table_layout(binding: object) -> dict | None:
+        if not isinstance(binding, dict) or binding.get("enabled") is False:
+            return None
+        table = binding.get("table_layout") or binding.get("tableLayout")
+        if not isinstance(table, dict):
+            return None
+        rows = table.get("rows")
+        if not isinstance(rows, list) or not rows:
+            return None
+        columns = table.get("columns")
+        return {
+            "columns": columns if isinstance(columns, int) and columns > 0 else 12,
+            "rows": rows,
+        }
+
+    def _profile_binding_labels(binding: object) -> dict[str, str]:
+        out: dict[str, str] = {}
+        if not isinstance(binding, dict):
+            return out
+        fields = binding.get("fields")
+        if not isinstance(fields, list):
+            return out
+        for item in fields:
+            if not isinstance(item, dict):
+                continue
+            key = item.get("field_key")
+            label = item.get("visible_label")
+            if isinstance(key, str) and isinstance(label, str) and label.strip():
+                out[key] = label.strip()
+        return out
+
+    def _render_profile_print_table(binding: object) -> Table | None:
+        layout = _profile_table_layout(binding)
+        if not layout:
+            return None
+        cols = layout["columns"]
+        labels = _profile_binding_labels(binding)
+        data: list[list[object]] = []
+        spans: list[tuple[int, int, int, int]] = []
+        for row in layout["rows"]:
+            if not isinstance(row, dict) or not isinstance(row.get("cells"), list):
+                continue
+            out_row = ["" for _ in range(cols)]
+            data.append(out_row)
+            ri = len(data) - 1
+            cursor = 0
+            for cell in row["cells"]:
+                if not isinstance(cell, dict) or cursor >= cols:
+                    continue
+                field_key = cell.get("field_key")
+                if not isinstance(field_key, str) or not field_key:
+                    continue
+                col_span = cell.get("col_span") if isinstance(cell.get("col_span"), int) else 2
+                label_span = cell.get("label_span") if isinstance(cell.get("label_span"), int) else 1
+                value_span = cell.get("value_span") if isinstance(cell.get("value_span"), int) else max(1, col_span - label_span)
+                label_span = max(1, min(label_span, cols - cursor))
+                label = cell.get("label") if isinstance(cell.get("label"), str) else ""
+                label = label.strip() or labels.get(field_key) or PROFILE_LABELS.get(field_key, field_key)
+                _span_cell(data, spans, ri, cursor, 1, label_span, _to_para(label, style_cell_bold))
+                cursor += label_span
+                if cursor >= cols:
+                    break
+                value_span = max(1, min(value_span, cols - cursor))
+                value = profile_merged.get(field_key)
+                if field_key in _PDF_FIELD_KEYS:
+                    display = _format_profile_upload_filenames(value)
+                else:
+                    display = _translate_profile_value(field_key, value)
+                _span_cell(data, spans, ri, cursor, 1, value_span, _to_para(display, style_cell))
+                cursor += value_span
+        if not data:
+            return None
+        return _print_table(data, spans)
+
+    def _normalize_sections(sub: dict) -> list[dict]:
+        raw = sub.get("sections")
+        if isinstance(raw, list):
+            sections = [x for x in raw if isinstance(x, dict)]
+            return sorted(sections, key=lambda x: x.get("order") if isinstance(x.get("order"), (int, float)) else 0)
+        kind = "list" if sub.get("type") == "list" else "map"
+        return [{**sub, "key": "__default", "kind": kind, "order": 0}]
+
+    def _decl_get_section(module_key: str, sub_key: str, section_key: str) -> dict:
+        mod = decl.get("modules", {}).get(module_key, {}) if isinstance(decl.get("modules"), dict) else {}
+        sub = mod.get(sub_key, {}) if isinstance(mod, dict) else {}
+        if not isinstance(sub, dict):
+            return {}
+        # 新结构：modules[module][sub][section] = {map|list|form}
+        sec = sub.get(section_key)
+        if isinstance(sec, dict) and any(k in sec for k in ("map", "list", "form")):
+            return sec
+        # 旧结构：modules[module][sub] = {map|list}
+        if any(k in sub for k in ("map", "list", "form")):
+            return sub
+        return {}
+
+    def _decl_get_map_section(module_key: str, sub_key: str, section_key: str) -> dict:
+        sec = _decl_get_section(module_key, sub_key, section_key)
+        mp = sec.get("map") if isinstance(sec, dict) else None
+        return mp if isinstance(mp, dict) else {}
+
+    def _decl_get_list_section(module_key: str, sub_key: str, section_key: str) -> list[dict] | None:
+        sec = _decl_get_section(module_key, sub_key, section_key)
+        lst = sec.get("list") if isinstance(sec, dict) else None
+        rows = lst.get("rows") if isinstance(lst, dict) else None
+        if isinstance(rows, list):
+            return [r for r in rows if isinstance(r, dict)]
+        return None
+
+    def _cell_span(raw: object, default: int = 1) -> int:
+        return raw if isinstance(raw, int) and raw > 0 else default
+
+    def _render_text_map_print(sec: dict, module_key: str, sub_key: str, section_key: str) -> Table:
+        print_columns = _cell_span(sec.get("printColumns"), 12)
+        print_rows = _cell_span(sec.get("printRows"), 4)
+        title_mode = sec.get("printTitleMode") if sec.get("printTitleMode") in ("left_merged", "hidden") else "top"
+        title_span = max(1, min(print_columns - 1, _cell_span(sec.get("printTitleSpan"), 2)))
+        title = str(sec.get("title") or "表单汇总")
+        mp = _decl_get_map_section(module_key, sub_key, section_key)
+        text_value = mp.get("__text_block")
+        body_text = text_value if isinstance(text_value, str) and text_value.strip() else sec.get("sentenceTemplate")
+        body_para = _to_para(body_text or "—", style_cell_left)
+        if title_mode == "left_merged":
+            content_cols = max(1, print_columns - title_span)
+            data = _empty_grid(print_rows, 1 + content_cols)
+            spans: list[tuple[int, int, int, int]] = []
+            _span_cell(data, spans, 0, 0, print_rows, 1, _to_para(title, style_cell_bold))
+            _span_cell(data, spans, 0, 1, print_rows, content_cols, body_para)
+            left_width = 34 * mm
+            col_widths = [left_width] + [(page_content_width - left_width) / content_cols] * content_cols
+            return _print_table(data, spans, col_widths=col_widths)
+        if title_mode == "hidden":
+            data = _empty_grid(print_rows, print_columns)
+            spans = []
+            _span_cell(data, spans, 0, 0, print_rows, print_columns, body_para)
+            return _print_table(data, spans)
+        data = _empty_grid(print_rows + 1, print_columns)
+        spans = []
+        _span_cell(data, spans, 0, 0, 1, print_columns, _to_para(title, style_cell_bold))
+        _span_cell(data, spans, 1, 0, print_rows, print_columns, body_para)
+        return _print_table(data, spans)
+
+    def _render_statement_grid(sec: dict) -> Table:
+        print_columns = _cell_span(sec.get("printColumns"), 12)
+        layout = sec.get("statementLayout") if isinstance(sec.get("statementLayout"), dict) else {}
+        cols_raw = layout.get("columns") if isinstance(layout, dict) else []
+        columns = [x for x in cols_raw if isinstance(x, dict)] if isinstance(cols_raw, list) else []
+        if not columns:
+            return _print_table([[_to_para("—", style_cell)]])
+        data = _empty_grid(1, print_columns)
+        spans: list[tuple[int, int, int, int]] = []
+        cursor = 0
+        for idx, col in enumerate(columns):
+            if cursor >= print_columns:
+                break
+            span = max(1, min(_cell_span(col.get("col_span"), 4), print_columns - cursor))
+            text = "\n".join(
+                x
+                for x in [
+                    str(col.get("title") or ""),
+                    str(col.get("content") or ""),
+                    str(col.get("footer_label") or ""),
+                    str(col.get("date_label") or ""),
+                ]
+                if x
+            )
+            _span_cell(data, spans, 0, cursor, 1, span, _to_para(text, style_cell_left))
+            cursor += span
+        return _print_table(data, spans)
+
+    def _render_list_print(sec: dict, module_key: str, sub_key: str, section_key: str) -> Table:
+        print_columns = _cell_span(sec.get("printColumns"), 12)
+        title = str(sec.get("title") or "列表")
+        cols_raw = sec.get("columns")
+        columns = [x for x in cols_raw if isinstance(x, dict)] if isinstance(cols_raw, list) else []
+        rows = _decl_get_list_section(module_key, sub_key, section_key)
+        actual_rows = rows if rows is not None else []
+        render_rows = max(1, len(actual_rows))
+        data = _empty_grid(render_rows + 2, print_columns)
+        spans: list[tuple[int, int, int, int]] = []
+        _span_cell(data, spans, 0, 0, 1, print_columns, _to_para(title, style_cell_bold))
+        cursor = 0
+        normalized_cols: list[tuple[str, str, int, str]] = []
+        for idx, col in enumerate(columns):
+            if cursor >= print_columns:
+                break
+            span = max(1, min(_cell_span(col.get("colSpan") or col.get("col_span"), 2), print_columns - cursor))
+            name = str(col.get("name") or f"col_{idx}")
+            title_text = str(col.get("title") or name)
+            cell_type = str(col.get("cellType") or "text")
+            normalized_cols.append((name, title_text, span, cell_type))
+            _span_cell(data, spans, 1, cursor, 1, span, _to_para(title_text, style_cell_bold))
+            cursor += span
+        for ri in range(render_rows):
+            cursor = 0
+            row = actual_rows[ri] if ri < len(actual_rows) else {}
+            for name, _title, span, cell_type in normalized_cols:
+                if cursor >= print_columns:
+                    break
+                actual_span = max(1, min(span, print_columns - cursor))
+                _span_cell(
+                    data,
+                    spans,
+                    ri + 2,
+                    cursor,
+                    1,
+                    actual_span,
+                    _to_para(_render_decl_value(cell_type, {}, row.get(name)), style_cell),
+                )
+                cursor += actual_span
+        return _print_table(data, spans, row_heights=[10 * mm, 10 * mm] + [9 * mm] * render_rows)
+
     def _build_pdf(flowables: list, title: str) -> BytesIO:
         buf = BytesIO()
         doc = SimpleDocTemplate(
@@ -759,82 +1557,89 @@ def preview_material_pdf(
             used_keys.add(_fk)
 
     profile_flows: list = []
-    profile_flows.append(Paragraph("个人信息", style_h1))
-    profile_flows.append(Spacer(1, 2 * mm))
+    profile_binding = (
+        decl_cfg.get("profileBinding")
+        if isinstance(decl_cfg, dict) and isinstance(decl_cfg.get("profileBinding"), dict)
+        else None
+    )
+    profile_print_table = _render_profile_print_table(profile_binding)
+    if profile_print_table is not None:
+        profile_flows.append(profile_print_table)
+        profile_flows.append(Spacer(1, 2 * mm))
+    else:
+        profile_flows.append(Paragraph("个人信息", style_h1))
+        profile_flows.append(Spacer(1, 2 * mm))
 
-    for group_title, keys in _profile_groups():
-        group_rows: list[tuple[str, str]] = []
-        for k in keys:
-            if k not in profile_merged:
+        for group_title, keys in _profile_groups():
+            group_rows: list[tuple[str, str]] = []
+            for k in keys:
+                if k not in profile_merged:
+                    continue
+                if k in PROFILE_EXCLUDE_KEYS:
+                    continue
+                v = profile_merged.get(k)
+                if v is None or v == "":
+                    continue
+                used_keys.add(k)
+                label = PROFILE_LABELS.get(k, k)
+                if k in _PDF_FIELD_KEYS:
+                    group_rows.append((label, _format_profile_upload_filenames(v)))
+                    continue
+                if k == "id_photo":
+                    continue
+                if k in ("form_status", "submitted"):
+                    continue
+                group_rows.append((label, _translate_profile_value(k, v)))
+            if not group_rows:
+                continue
+            profile_flows.append(Paragraph(group_title, style_h2))
+            if group_title == "基本信息" and id_photo_path and os.path.isfile(id_photo_path):
+                try:
+                    img = RLImage(id_photo_path)
+                    img.drawHeight = 36 * mm
+                    img.drawWidth = 28 * mm
+                    photo_row = Table(
+                        [[Spacer(1, 38 * mm), img]],
+                        colWidths=[130 * mm, 40 * mm],
+                    )
+                    photo_row.setStyle(
+                        TableStyle(
+                            [
+                                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                            ]
+                        )
+                    )
+                    profile_flows.append(photo_row)
+                    profile_flows.append(Spacer(1, 2 * mm))
+                except Exception:
+                    pass
+            profile_flows.append(_table_desc_2col(group_rows))
+            profile_flows.append(Spacer(1, 4 * mm))
+
+        # any remaining keys (ensure "完整信息")
+        remain = []
+        for k in sorted(profile_merged.keys()):
+            if k in used_keys:
                 continue
             if k in PROFILE_EXCLUDE_KEYS:
+                continue
+            if k in ("form_status", "submitted"):
                 continue
             v = profile_merged.get(k)
             if v is None or v == "":
                 continue
-            used_keys.add(k)
-            label = PROFILE_LABELS.get(k, k)
-            if k in _PDF_FIELD_KEYS:
-                group_rows.append((label, _format_profile_upload_filenames(v)))
-                continue
-            if k == "id_photo":
-                continue
-            if k in ("form_status", "submitted"):
-                continue
-            group_rows.append((label, _translate_profile_value(k, v)))
-        if not group_rows:
-            continue
-        profile_flows.append(Paragraph(group_title, style_h2))
-        if group_title == "基本信息" and id_photo_path and os.path.isfile(id_photo_path):
-            try:
-                img = RLImage(id_photo_path)
-                img.drawHeight = 36 * mm
-                img.drawWidth = 28 * mm
-                photo_row = Table(
-                    [[Spacer(1, 38 * mm), img]],
-                    colWidths=[130 * mm, 40 * mm],
-                )
-                photo_row.setStyle(
-                    TableStyle(
-                        [
-                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-                            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                            ("TOPPADDING", (0, 0), (-1, -1), 0),
-                            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-                        ]
-                    )
-                )
-                profile_flows.append(photo_row)
-                profile_flows.append(Spacer(1, 2 * mm))
-            except Exception:
-                pass
-        profile_flows.append(_table_desc_2col(group_rows))
-        profile_flows.append(Spacer(1, 4 * mm))
+            remain.append((PROFILE_LABELS.get(k, k), _translate_profile_value(k, v)))
+        if remain:
+            profile_flows.append(Paragraph("补充字段", style_h2))
+            profile_flows.append(_table_desc_2col(remain))
 
-    # any remaining keys (ensure "完整信息")
-    remain = []
-    for k in sorted(profile_merged.keys()):
-        if k in used_keys:
-            continue
-        if k in PROFILE_EXCLUDE_KEYS:
-            continue
-        if k in ("form_status", "submitted"):
-            continue
-        v = profile_merged.get(k)
-        if v is None or v == "":
-            continue
-        remain.append((PROFILE_LABELS.get(k, k), _translate_profile_value(k, v)))
-    if remain:
-        profile_flows.append(Paragraph("补充字段", style_h2))
-        profile_flows.append(_table_desc_2col(remain))
-
-    profile_flows.append(PageBreak())
-    profile_pdf = _build_pdf(profile_flows, f"material-{material_id}-profile")
-
-    # ---- section pdf: declaration content ----
-    decl_flows: list = [Paragraph("申报内容", style_h1)]
+    # ---- declaration content: append directly after profile tables, no forced split ----
+    decl_flows: list = []
     if not decl_cfg or not isinstance(decl_cfg.get("modules"), list):
         decl_flows.append(
             Paragraph("未找到已发布的申报配置，以下展示原始 JSON（完整）。", style_small),
@@ -845,50 +1650,40 @@ def preview_material_pdf(
         modules = [m for m in decl_cfg.get("modules", []) if isinstance(m, dict)]
         for mi, mod in enumerate(modules):
             mod_key = str(mod.get("key") or f"module_{mi}")
-            mod_title = str(mod.get("title") or mod_key) or mod_key
-            decl_flows.append(Paragraph(mod_title, style_h2))
             subs_raw = mod.get("subModules")
             subs = [s for s in subs_raw if isinstance(s, dict)] if isinstance(subs_raw, list) else []
             if not subs:
-                decl_flows.append(Paragraph("（该模块未配置子模块）", style_small))
-                decl_flows.append(Spacer(1, 2 * mm))
                 continue
             for si, sub in enumerate(subs):
                 sub_key = str(sub.get("key") or f"sub_{si}")
-                sub_title = str(sub.get("title") or sub_key) or sub_key
-                sub_type = str(sub.get("type") or "map")
-                decl_flows.append(Paragraph(sub_title, style_body))
-                fields_raw = sub.get("fields")
-                fields = [f for f in fields_raw if isinstance(f, dict)] if isinstance(fields_raw, list) else []
-                if sub_type == "list":
-                    rows_list = _decl_get_list_rows(mod_key, sub_key)
-                    if not rows_list:
-                        decl_flows.append(Paragraph("（未填写）", style_small))
-                        decl_flows.append(Spacer(1, 2 * mm))
-                        continue
-                    for ri, row in enumerate(rows_list):
-                        kv: list[tuple[str, str]] = [("行号", str(ri + 1))]
-                        for fi, f in enumerate(fields):
-                            fname = str(f.get("name") or f"field_{fi}")
-                            flabel = str(f.get("label") or fname) or fname
-                            widget = str(f.get("widget") or "input")
-                            kv.append((flabel, _render_decl_value(widget, f, row.get(fname))))
-                        decl_flows.append(_table_kv(kv))
-                        decl_flows.append(Spacer(1, 3 * mm))
-                else:
-                    mp = _decl_get_map(mod_key, sub_key)
-                    if not mp:
-                        decl_flows.append(Paragraph("（未填写）", style_small))
-                        decl_flows.append(Spacer(1, 2 * mm))
-                        continue
-                    kv = []
-                    for fi, f in enumerate(fields):
-                        fname = str(f.get("name") or f"field_{fi}")
-                        flabel = str(f.get("label") or fname) or fname
-                        widget = str(f.get("widget") or "input")
-                        kv.append((flabel, _render_decl_value(widget, f, mp.get(fname))))
-                    decl_flows.append(_table_kv(kv))
-                    decl_flows.append(Spacer(1, 4 * mm))
+                sections = _normalize_sections(sub)
+                for ki, sec in enumerate(sections):
+                    section_key = str(sec.get("key") or f"sec_{ki}")
+                    kind = str(sec.get("kind") or ("list" if sub.get("type") == "list" else "map"))
+                    try:
+                        if kind == "list":
+                            decl_flows.append(_render_list_print(sec, mod_key, sub_key, section_key))
+                            continue
+                        if kind == "map":
+                            mode = str(sec.get("mapPrintMode") or "text_block")
+                            if mode == "statement_grid":
+                                decl_flows.append(_render_statement_grid(sec))
+                            elif mode == "field_table":
+                                fields_raw = sec.get("fields")
+                                fields = [f for f in fields_raw if isinstance(f, dict)] if isinstance(fields_raw, list) else []
+                                mp = _decl_get_map_section(mod_key, sub_key, section_key)
+                                kv = []
+                                for fi, f in enumerate(fields):
+                                    fname = str(f.get("name") or f"field_{fi}")
+                                    flabel = str(f.get("label") or fname) or fname
+                                    widget = str(f.get("widget") or "input")
+                                    kv.append((flabel, _render_decl_value(widget, f, mp.get(fname))))
+                                decl_flows.append(_table_kv(kv or [("内容", "—")]))
+                            else:
+                                decl_flows.append(_render_text_map_print(sec, mod_key, sub_key, section_key))
+                            continue
+                    finally:
+                        decl_flows.append(Spacer(1, 0))
 
         # include any extra keys not covered by config
         try:
@@ -917,8 +1712,7 @@ def preview_material_pdf(
         except Exception:
             pass
 
-    decl_flows.append(PageBreak())
-    decl_pdf = _build_pdf(decl_flows, f"material-{material_id}-declaration")
+    content_pdf = _build_pdf([*profile_flows, *decl_flows], f"material-{material_id}-content")
 
     try:
         from pypdf import PdfReader, PdfWriter
@@ -926,10 +1720,9 @@ def preview_material_pdf(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"PDF 预览依赖缺失: {e}")
 
     writer = PdfWriter()
-    # 先合并：封面 -> 个人信息 -> 申报内容 -> PDF 附件（申报材料 + 个人档案）
+    # 先合并：封面 -> 填报内容（个人信息 + 申报内容连续表格） -> PDF 附件（申报材料 + 个人档案）
     cover_reader = PdfReader(cover_pdf)
-    profile_reader = PdfReader(profile_pdf)
-    decl_reader = PdfReader(decl_pdf)
+    content_reader = PdfReader(content_pdf)
 
     def _append_reader(r: PdfReader) -> int:
         start = len(writer.pages)
@@ -954,8 +1747,7 @@ def preview_material_pdf(
 
     # 先放 cover，TOC 生成后再插入
     cover_start = _append_reader(cover_reader)
-    profile_start = _append_reader(profile_reader)
-    decl_start = _append_reader(decl_reader)
+    content_start = _append_reader(content_reader)
 
     attachment_outline: list[tuple[str, int]] = []
     for a in pdfs:
@@ -1014,8 +1806,7 @@ def preview_material_pdf(
 
     # ---- bookmarks / outline（顶层直接为各章节，不再套「申报材料 #N」根节点）----
     writer.add_outline_item("封面", 0, parent=None)
-    writer.add_outline_item("个人信息", profile_start + toc_pages, parent=None)
-    writer.add_outline_item("申报内容", decl_start + toc_pages, parent=None)
+    writer.add_outline_item("填报内容", content_start + toc_pages, parent=None)
     merged_pdf_children = [*attachment_outline, *profile_attachment_outline]
     if merged_pdf_children:
         first_merged_page = merged_pdf_children[0][1] + toc_pages
@@ -1044,14 +1835,71 @@ def update_material(material_id: int, data: MaterialUpdate, db: DbSession, curre
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="材料不存在")
     if material.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限")
-    if material.status != 0:
+    if not _is_material_editable(material):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="已提交的材料不可修改")
 
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(material, field, value)
+        if field == "content":
+            flag_modified(material, "content")
     db.commit()
     db.refresh(material)
     return _material_to_out(db, material)
+
+
+@router.post("/{material_id}/cancel", response_model=MaterialOut)
+def cancel_material(
+    material_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    active_role: ActiveRoleCode,
+):
+    material = _get_material_for_active_role(db, material_id, current_user, active_role)
+    if not _is_material_in_review(material):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅审批中的材料可取消")
+
+    material.status = 0
+    material.workflow_status = "draft"
+    material.current_step_index = None
+    material.submitted_at = None
+    material.approval_snapshot = None
+    material.profile_version_id = None
+    db.execute(delete(ApprovalCommentAnchor).where(ApprovalCommentAnchor.material_id == material_id))
+    db.execute(delete(ApproveRecord).where(ApproveRecord.material_id == material_id))
+    db.add(
+        MaterialDraftSnapshot(
+            material_id=material_id,
+            snapshot_type="cancel",
+            version=_next_snapshot_version(db, material_id),
+            data_json=material.content if isinstance(material.content, dict) else {},
+            config_version=None,
+            created_by=current_user.id,
+        )
+    )
+    db.commit()
+    db.refresh(material)
+    return _material_to_out(db, material)
+
+
+@router.delete("/{material_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_material(
+    material_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    active_role: ActiveRoleCode,
+):
+    material = _get_material_for_active_role(db, material_id, current_user, active_role)
+    if not _is_material_editable(material):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅草稿或驳回材料可删除")
+
+    db.execute(delete(ApprovalCommentAnchor).where(ApprovalCommentAnchor.material_id == material_id))
+    db.execute(delete(ApproveRecord).where(ApproveRecord.material_id == material_id))
+    db.execute(delete(MaterialValidationIssue).where(MaterialValidationIssue.material_id == material_id))
+    db.execute(delete(MaterialDraftSnapshot).where(MaterialDraftSnapshot.material_id == material_id))
+    db.execute(delete(FileAttachment).where(FileAttachment.material_id == material_id))
+    db.delete(material)
+    db.commit()
+    return None
 
 
 @router.post("/{material_id}/submit", response_model=MaterialOut)
@@ -1061,17 +1909,30 @@ def submit_material(material_id: int, db: DbSession, current_user: CurrentUser):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="材料不存在")
     if material.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限")
-    if material.status != 0:
+    if not _is_material_editable(material):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前状态不可提交")
 
-    project = db.get(ApplyProject, material.project_id)
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+    project = _assert_project_accepting_materials(db.get(ApplyProject, material.project_id))
+
+    config, config_version = _get_active_decl_config(db, material.project_id)
+    content = material.content if isinstance(material.content, dict) else {}
+    validation = _validate_material_content(config, content)
+    if not validation.valid:
+        _persist_validation_issues(db, material_id, validation)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=[issue.model_dump() for issue in validation.errors],
+        )
+
     flow = parse_project_flow(get_effective_project_flow_dict(db, project))
-    if flow:
-        material.approval_snapshot = flow.model_dump()
-    else:
-        material.approval_snapshot = None
+    if not flow:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="当前项目未发布审批流程，无法提交申报",
+        )
+    _assert_flow_resolves_assignees(db, material, flow)
+    material.approval_snapshot = flow.model_dump()
 
     # 提交材料时绑定“当前已发布”的个人资料版本（若不存在则创建一个）
     # 说明：个人资料的“提交”行为发生在资料页（draft -> published）；材料提交不应隐式生成新版本，
@@ -1096,7 +1957,19 @@ def submit_material(material_id: int, db: DbSession, current_user: CurrentUser):
     material.profile_version_id = pv.id
 
     material.status = 1
+    material.workflow_status = "reviewing"
+    material.current_step_index = 0
     material.submitted_at = datetime.now(timezone.utc)
+    db.add(
+        MaterialDraftSnapshot(
+            material_id=material_id,
+            snapshot_type="submit",
+            version=_next_snapshot_version(db, material_id),
+            data_json=content,
+            config_version=config_version,
+            created_by=current_user.id,
+        )
+    )
     db.commit()
     db.refresh(material)
     return _material_to_out(db, material)

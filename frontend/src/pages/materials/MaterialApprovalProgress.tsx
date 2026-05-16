@@ -48,6 +48,8 @@ function buildStepItems(materialStatus: number, stepTitles: string[], n: number)
 type Props = {
   materialId: number;
   materialStatus: number;
+  workflowStatus?: string | null;
+  currentStepIndex?: number | null;
   projectId?: number;
   /** 来自材料接口，与提交时快照一致（含会签人姓名） */
   snapshotDisplay?: ApprovalFlowStepDisplay[] | null;
@@ -56,6 +58,8 @@ type Props = {
 export default function MaterialApprovalProgress({
   materialId,
   materialStatus,
+  workflowStatus,
+  currentStepIndex,
   projectId,
   snapshotDisplay: snapshotDisplayProp,
 }: Props) {
@@ -133,7 +137,7 @@ export default function MaterialApprovalProgress({
     [materialStatus, stepTitles, n],
   );
 
-  const phaseLabel = materialStatusLabel(materialStatus, n);
+  const phaseLabel = materialStatusLabel(materialStatus, n, workflowStatus, currentStepIndex);
 
   return (
     <div className="materialApprovalProgress">

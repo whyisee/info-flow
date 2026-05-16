@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.config import get_settings
-from app.database import Base, engine
+from app.database import Base, engine, ensure_runtime_schema
 
 settings = get_settings()
 
@@ -18,13 +18,16 @@ async def lifespan(app: FastAPI):
     import app.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    ensure_runtime_schema()
     from app.database import SessionLocal
     from app.core.rbac_service import promote_superuser_from_env, seed_rbac
+    from app.core.profile_field_catalog_seed import seed_profile_field_catalog_if_empty
 
     db = SessionLocal()
     try:
         seed_rbac(db)
         promote_superuser_from_env(db)
+        seed_profile_field_catalog_if_empty(db)
     finally:
         db.close()
     yield

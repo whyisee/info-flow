@@ -87,11 +87,7 @@ def list_pending(
     legacy_expected = ROLE_APPROVE_STATUS.get(role, (None, None))[0]
 
     materials = db.execute(
-        select(ApplyMaterial).where(
-            ApplyMaterial.status >= 1,
-            ApplyMaterial.status != afs.REJECTED_STATUS,
-            ApplyMaterial.status <= 64,
-        )
+        select(ApplyMaterial).where(ApplyMaterial.workflow_status == afs.WF_REVIEWING)
     ).scalars().all()
 
     records: list[ApprovalOut] = []
@@ -173,10 +169,7 @@ def list_my_queue(
     legacy_expected = ROLE_APPROVE_STATUS.get(role, (None, None))[0]
 
     materials = db.execute(
-        select(ApplyMaterial).where(
-            ApplyMaterial.status >= 1,
-            ApplyMaterial.status <= 64,
-        )
+        select(ApplyMaterial).where(ApplyMaterial.workflow_status == afs.WF_REVIEWING)
     ).scalars().all()
 
     # 我处理过的材料：取最新一条记录
@@ -356,7 +349,14 @@ def approve(
         db.add(record)
         db.flush()
         if afs.step_fully_signed(db, material, idx):
-            material.status += 1
+            if idx + 1 >= afs.step_count(material):
+                material.workflow_status = afs.WF_APPROVED
+                material.current_step_index = None
+                material.status = afs.done_status_value(material)
+            else:
+                material.workflow_status = afs.WF_REVIEWING
+                material.current_step_index = idx + 1
+                material.status = idx + 2
         db.commit()
         db.refresh(record)
         return record
@@ -372,7 +372,15 @@ def approve(
             step_index=idx,
         )
         db.add(record)
-        material.status += 1
+        next_idx = idx + 1
+        if next_idx >= afs.step_count(material):
+            material.workflow_status = afs.WF_APPROVED
+            material.current_step_index = None
+            material.status = afs.done_status_value(material)
+        else:
+            material.workflow_status = afs.WF_REVIEWING
+            material.current_step_index = next_idx
+            material.status = next_idx + 1
         db.commit()
         db.refresh(record)
         return record
@@ -393,7 +401,14 @@ def approve(
         step_index=idx,
     )
     db.add(record)
-    material.status = next_status
+    if next_status == afs.done_status_value(material):
+        material.workflow_status = afs.WF_APPROVED
+        material.current_step_index = None
+        material.status = afs.done_status_value(material)
+    else:
+        material.workflow_status = afs.WF_REVIEWING
+        material.current_step_index = max(0, next_status - 1)
+        material.status = next_status
     db.commit()
     db.refresh(record)
     return record
@@ -444,6 +459,8 @@ def return_material(
                 detail="非并行环节不要传 lane_index",
             )
     material.status = 0
+    material.workflow_status = afs.WF_RETURNED
+    material.current_step_index = None
     material.approval_snapshot = None
 
     record = ApproveRecord(
@@ -476,6 +493,8 @@ def reject(
 
     idx = afs.current_step_index(material)
     material.status = afs.REJECTED_STATUS
+    material.workflow_status = afs.WF_REJECTED
+    material.current_step_index = None
     record = ApproveRecord(
         material_id=material_id,
         approver_id=current_user.id,

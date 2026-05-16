@@ -27,11 +27,15 @@ export function resolveTabLabel(pathname: string, state: unknown): string {
 
 const PATH_LABELS: Record<string, string> = {
   "/declaration/dashboard": "首页",
+  "/declaration/admin-dashboard": "数据看板",
+  "/declaration/audit-logs": "审计日志",
+  "/teacher/workbench": "教师工作台",
   "/declaration/profile": "基本信息",
   "/declaration/projects": "项目管理",
   "/declaration/materials": "我的申报",
   "/declaration/approvals": "审批中心",
-  "/declaration/templates": "模板管理",
+  "/declaration/config-templates": "配置模板库",
+  "/declaration/templates": "文件模板",
   "/survey": "问卷概览",
   "/survey/design": "问卷设计",
   "/survey/fill": "问卷填写",
@@ -41,6 +45,8 @@ const PATH_LABELS: Record<string, string> = {
   "/system/permissions/roles": "角色授权",
   "/system/settings": "系统设置",
   "/system/dict": "字典维护",
+  "/system/profile-fields": "基本信息字段",
+  "/help": "帮助中心",
 };
 
 export function getTabLabel(pathname: string): string {
@@ -57,6 +63,8 @@ export function getTabLabel(pathname: string): string {
   }
   if (PATH_LABELS[pathname]) return PATH_LABELS[pathname];
   if (pathname === "/declaration/materials/new") return "新建申报";
+  const mp = pathname.match(/^\/declaration\/materials\/(\d+)\/preview$/);
+  if (mp) return `打印预览 #${mp[1]}`;
   const m = pathname.match(/^\/declaration\/materials\/(\d+)$/);
   if (m) return `申报 #${m[1]}`;
   const ap = pathname.match(/^\/declaration\/approvals\/process\/(\d+)$/);
@@ -94,6 +102,9 @@ export function getMenuSelectedKey(pathname: string): string {
   }
   if (pathname.startsWith("/system/dict")) {
     return "/system/dict";
+  }
+  if (pathname.startsWith("/help")) {
+    return "/help";
   }
   return pathname;
 }

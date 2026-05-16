@@ -9,12 +9,12 @@ def default_approval_flow_draft() -> dict[str, Any]:
         "steps": [
             {
                 "kind": "approval",
-                "title": "环节1",
+                "title": "审批环节1",
                 "vote_mode": "cosign",
                 "assignee_source": "explicit_users",
                 "assignee_user_ids": [],
                 "dept_id": None,
-            }
+            },
         ]
     }
 

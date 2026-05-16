@@ -10,7 +10,6 @@ import {
   Modal,
   Select,
   Space,
-  Tabs,
   Segmented,
   Tag,
   Tooltip,
@@ -79,6 +78,52 @@ function toDescItems(
     span: it.span,
     children: renderV(it.key, it.value),
   }));
+}
+
+type ProfilePrintCell = {
+  fieldKey: string;
+  label: string;
+  labelSpan: number;
+  valueSpan: number;
+  colSpan: number;
+};
+
+type ProfilePrintLayout = {
+  columns: number;
+  rows: { cells: ProfilePrintCell[] }[];
+};
+
+function parseProfilePrintLayout(binding: unknown): ProfilePrintLayout | null {
+  if (!binding || typeof binding !== "object" || Array.isArray(binding)) return null;
+  const table = (binding as Record<string, unknown>).table_layout;
+  if (!table || typeof table !== "object" || Array.isArray(table)) return null;
+  const tableObj = table as Record<string, unknown>;
+  const rowsRaw = tableObj.rows;
+  if (!Array.isArray(rowsRaw)) return null;
+  const rows = rowsRaw.flatMap((row): { cells: ProfilePrintCell[] }[] => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return [];
+    const cellsRaw = (row as Record<string, unknown>).cells;
+    if (!Array.isArray(cellsRaw)) return [];
+    const cells = cellsRaw.flatMap((raw): ProfilePrintCell[] => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+      const cell = raw as Record<string, unknown>;
+      const fieldKey = typeof cell.field_key === "string" ? cell.field_key : "";
+      if (!fieldKey) return [];
+      return [
+        {
+          fieldKey,
+          label: typeof cell.label === "string" ? cell.label : "",
+          labelSpan: typeof cell.label_span === "number" ? cell.label_span : 1,
+          valueSpan: typeof cell.value_span === "number" ? cell.value_span : 1,
+          colSpan: typeof cell.col_span === "number" ? cell.col_span : 2,
+        },
+      ];
+    });
+    return cells.length ? [{ cells }] : [];
+  });
+  if (!rows.length) return null;
+  const columns = typeof tableObj.columns === "number" && tableObj.columns > 0 ? tableObj.columns : 12;
+  return { columns, rows };
 }
 
 function firstProfileUploadUrl(v: unknown): string | undefined {
@@ -550,14 +595,17 @@ export default function ApprovalProcessPage() {
   }, [profileMerged]);
 
   const n = material ? materialStepCount(material) : pendingRecord?.approval_step_count ?? 3;
-  const phaseLabel = material && typeof material.status === "number" ? materialStatusLabel(material.status, n) : "—";
+  const phaseLabel =
+    material && typeof material.status === "number"
+      ? materialStatusLabel(material.status, n, material.workflow_status, material.current_step_index)
+      : "—";
   const phaseColor =
     material && typeof material.status === "number"
-      ? material.status === 0
+      ? material.workflow_status === "draft" || material.status === 0
         ? "default"
-        : material.status === 5
+        : material.workflow_status === "returned" || material.workflow_status === "rejected" || material.status === 5
           ? "red"
-          : material.status === n + 1
+          : material.workflow_status === "approved" || material.status === n + 1
             ? "green"
             : STATUS_COLORS[material.status] ?? "processing"
       : "default";
@@ -566,6 +614,124 @@ export default function ApprovalProcessPage() {
     if (!pendingLanes) return [];
     return pendingLanes.map((i) => ({ value: i, label: `子轨 ${i + 1}` }));
   }, [pendingLanes]);
+
+  const profileBinding = useMemo(() => {
+    const cfg = declCfg?.config;
+    if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) return null;
+    const binding = (cfg as Record<string, unknown>).profileBinding;
+    return binding && typeof binding === "object" && !Array.isArray(binding)
+      ? (binding as Record<string, unknown>)
+      : null;
+  }, [declCfg?.config]);
+
+  const profilePrintLayout = useMemo(
+    () => parseProfilePrintLayout(profileBinding),
+    [profileBinding],
+  );
+
+  const profilePrintContent = useMemo(() => {
+    if (profileLoading) {
+      return <Typography.Text type="secondary">正在加载个人信息…</Typography.Text>;
+    }
+    if (profileRows.length === 0) {
+      return <Typography.Text type="secondary">未获取到个人信息</Typography.Text>;
+    }
+    if (profilePrintLayout) {
+      return (
+        <div
+          className="approvalProcessProfilePrintTable"
+          style={{ gridTemplateColumns: `repeat(${profilePrintLayout.columns}, minmax(0, 1fr))` }}
+        >
+          {profilePrintLayout.rows.flatMap((row, rowIndex) =>
+            row.cells.flatMap((cell, cellIndex) => {
+              const labelSpan = Math.max(1, cell.labelSpan || 1);
+              const valueSpan = Math.max(
+                1,
+                cell.valueSpan || Math.max(1, (cell.colSpan || 2) - labelSpan),
+              );
+              return [
+                <div
+                  key={`${rowIndex}_${cellIndex}_label`}
+                  className="approvalProcessProfilePrintLabel"
+                  style={{ gridColumn: `span ${labelSpan}` }}
+                >
+                  {cell.label.trim() || cell.fieldKey}
+                </div>,
+                <div
+                  key={`${rowIndex}_${cellIndex}_value`}
+                  className="approvalProcessProfilePrintValue"
+                  style={{ gridColumn: `span ${valueSpan}` }}
+                >
+                  {renderProfileValue(cell.fieldKey, profileMerged[cell.fieldKey])}
+                </div>,
+              ];
+            }),
+          )}
+        </div>
+      );
+    }
+    return (
+      <div className="approvalProcessProfileGroups">
+        <div className="approvalProcessProfileGroup">
+          <div className="approvalProcessProfileGroupTitle">基本信息</div>
+          <div className="approvalProcessProfileDescWrap">
+            {idPhotoUrl ? (
+              <div className="approvalProcessProfilePhotoFloat">
+                <Image
+                  src={idPhotoBlobUrl ?? idPhotoUrl}
+                  alt="证件照片"
+                  width={110}
+                  height={150}
+                  preview
+                />
+              </div>
+            ) : null}
+            <Descriptions
+              size="small"
+              bordered
+              column={2}
+              className="approvalProcessProfileDesc"
+              styles={{ label: { width: 180 } }}
+              items={toDescItems(profilePreviewItems, renderProfileValue)}
+            />
+          </div>
+        </div>
+        <div className="approvalProcessProfileGroup">
+          <div className="approvalProcessProfileGroupTitle">任务（岗位）及关键词</div>
+          <Descriptions
+            size="small"
+            bordered
+            column={2}
+            className="approvalProcessProfileDesc"
+            styles={{ label: { width: 180 } }}
+            items={toDescItems(taskKeywordItems, renderProfileValue)}
+          />
+        </div>
+        <div className="approvalProcessProfileGroup">
+          <div className="approvalProcessProfileGroupTitle">导师与回避信息</div>
+          <Descriptions
+            size="small"
+            bordered
+            column={2}
+            className="approvalProcessProfileDesc"
+            styles={{ label: { width: 180 } }}
+            items={toDescItems(supervisorRecuseItems, renderProfileValue)}
+          />
+        </div>
+      </div>
+    );
+  }, [
+    idPhotoBlobUrl,
+    idPhotoUrl,
+    profileLoading,
+    profileMerged,
+    profilePreviewItems,
+    profilePrintLayout,
+    profileRows.length,
+    renderProfileValue,
+    supervisorRecuseItems,
+    taskKeywordItems,
+  ]);
 
   const doAction = useCallback(
     async (action: "approve" | "reject", comment: string, lane_index?: number | null) => {
@@ -663,160 +829,32 @@ export default function ApprovalProcessPage() {
           <div className="approvalProcessDeclRenderer">
             <DeclarationConfigRenderer
               variant="preview"
-              moduleLayout="tabs"
+              moduleLayout="stack"
+              displayMode="print"
               config={declCfg.config ?? {}}
               draft={normalizeDeclarationDraft(
                 (material?.content as { declaration?: unknown } | null | undefined)?.declaration,
               )}
               leadingTab={{
                 key: "applicant_profile",
-                label: "个人信息",
-                children: profileLoading ? (
-                  <Typography.Text type="secondary">正在加载个人信息…</Typography.Text>
-                ) : profileRows.length > 0 ? (
-                  <div className="approvalProcessProfileGroups">
-                    <div className="approvalProcessProfileGroup">
-                      <div className="approvalProcessProfileGroupTitle">基本信息</div>
-                        <div className="approvalProcessProfileDescWrap">
-                          {idPhotoUrl ? (
-                            <div className="approvalProcessProfilePhotoFloat">
-                              <Image
-                                src={idPhotoBlobUrl ?? idPhotoUrl}
-                                alt="证件照片"
-                                width={110}
-                                height={150}
-                                preview
-                              />
-                            </div>
-                          ) : null}
-                          <Descriptions
-                            size="small"
-                            bordered
-                            column={2}
-                            className="approvalProcessProfileDesc"
-                            styles={{ label: { width: 180 } }}
-                            items={toDescItems(profilePreviewItems, renderProfileValue)}
-                          />
-                        </div>
-                    </div>
-                    <div className="approvalProcessProfileGroup">
-                      <div className="approvalProcessProfileGroupTitle">任务（岗位）及关键词</div>
-                      <Descriptions
-                        size="small"
-                        bordered
-                        column={2}
-                        className="approvalProcessProfileDesc"
-                        styles={{ label: { width: 180 } }}
-                        items={toDescItems(taskKeywordItems, renderProfileValue)}
-                      />
-                    </div>
-                    <div className="approvalProcessProfileGroup">
-                      <div className="approvalProcessProfileGroupTitle">导师与回避信息</div>
-                      <Descriptions
-                        size="small"
-                        bordered
-                        column={2}
-                        className="approvalProcessProfileDesc"
-                        styles={{ label: { width: 180 } }}
-                        items={toDescItems(supervisorRecuseItems, renderProfileValue)}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <Typography.Text type="secondary">未获取到个人信息</Typography.Text>
-                ),
+                label: "基本信息",
+                children: profilePrintContent,
               }}
             />
           </div>
         ) : (
           <div className="approvalProcessDeclRenderer">
-            <div className="declCfgRender">
-              <div className="declCfgRenderModuleTabs">
-                <Tabs
-                  items={[
-                    {
-                      key: "applicant_profile",
-                      label: "个人信息",
-                      children: profileLoading ? (
-                        <Typography.Text type="secondary">正在加载个人信息…</Typography.Text>
-                      ) : profileRows.length > 0 ? (
-                        <div className="approvalProcessProfileGroups">
-                          <div className="approvalProcessProfileGroup">
-                            <div className="approvalProcessProfileGroupTitle">基本信息</div>
-                            <div className="approvalProcessProfileDescWrap">
-                              {idPhotoUrl ? (
-                                <div className="approvalProcessProfilePhotoFloat">
-                                  <Image
-                                    src={idPhotoBlobUrl ?? idPhotoUrl}
-                                    alt="证件照片"
-                                    width={110}
-                                    height={150}
-                                    preview
-                                  />
-                                </div>
-                              ) : null}
-                              <Descriptions
-                                size="small"
-                                bordered
-                                column={2}
-                                className="approvalProcessProfileDesc"
-                                styles={{ label: { width: 180 } }}
-                                items={toDescItems(profilePreviewItems, renderProfileValue)}
-                              />
-                            </div>
-                          </div>
-                          <div className="approvalProcessProfileGroup">
-                            <div className="approvalProcessProfileGroupTitle">任务（岗位）及关键词</div>
-                            <Descriptions
-                              size="small"
-                              bordered
-                              column={2}
-                              className="approvalProcessProfileDesc"
-                              styles={{ label: { width: 180 } }}
-                              items={toDescItems(taskKeywordItems, renderProfileValue)}
-                            />
-                          </div>
-                          <div className="approvalProcessProfileGroup">
-                            <div className="approvalProcessProfileGroupTitle">导师与回避信息</div>
-                            <Descriptions
-                              size="small"
-                              bordered
-                              column={2}
-                              className="approvalProcessProfileDesc"
-                              styles={{ label: { width: 180 } }}
-                              items={toDescItems(supervisorRecuseItems, renderProfileValue)}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <Typography.Text type="secondary">未获取到个人信息</Typography.Text>
-                      ),
-                    },
-                    {
-                      key: "declaration_raw",
-                      label: "申报内容",
-                      children: (
-                        <pre className="approvalProcessContentPre">
-                          {renderValue(
-                            (material?.content as { declaration?: unknown } | null | undefined)
-                              ?.declaration,
-                          )}
-                        </pre>
-                      ),
-                    },
-                  ]}
-                />
-              </div>
+            <div className="declCfgRender declCfgRenderPrintFlow">
+              <div className="declCfgRenderPrintLeading">{profilePrintContent}</div>
+              <pre className="approvalProcessContentPre">
+                {renderValue(
+                  (material?.content as { declaration?: unknown } | null | undefined)
+                    ?.declaration,
+                )}
+              </pre>
             </div>
           </div>
         )}
-        <Typography.Paragraph type="secondary" className="approvalProcessPreviewHint">
-          {declCfgLoading
-            ? "正在加载申报配置…"
-            : declCfg
-              ? "已按项目当前生效的申报配置渲染（只读预览）。"
-              : "未获取到申报配置，已回退为原始内容预览（content.declaration）。"}
-        </Typography.Paragraph>
       </Card>
 
       {material ? null : <Card loading className="approvalProcessCard" />}
@@ -888,6 +926,8 @@ export default function ApprovalProcessPage() {
           <MaterialApprovalProgress
             materialId={material.id}
             materialStatus={material.status}
+            workflowStatus={material.workflow_status}
+            currentStepIndex={material.current_step_index}
             projectId={material.project_id}
             snapshotDisplay={material.approval_snapshot_display ?? null}
           />
@@ -931,4 +971,3 @@ export default function ApprovalProcessPage() {
     </div>
   );
 }
-

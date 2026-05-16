@@ -1,6 +1,7 @@
 import type { UploadFile } from "antd/es/upload/interface";
 import dayjs, { type Dayjs } from "dayjs";
 
+import type { ProfileFieldCatalogRow } from "../../../services/profileFieldCatalog";
 import { getProfileFileUrlFromUploadFile } from "../../../services/profileFile";
 
 /** 与后端 app.core.module_codes 一致 */
@@ -13,6 +14,38 @@ export const PROFILE_MODULE = {
 
 export type ProfileModuleCode =
   (typeof PROFILE_MODULE)[keyof typeof PROFILE_MODULE];
+
+const PROFILE_MODULE_MERGE_ORDER: ProfileModuleCode[] = [
+  PROFILE_MODULE.BASIC,
+  PROFILE_MODULE.TASK,
+  PROFILE_MODULE.CONTACT,
+  PROFILE_MODULE.SUPERVISOR,
+];
+
+/**
+ * 将资料版本 `profile`（含 merged、modules）展平为单层对象；
+ * merged 在同名键上覆盖 modules，避免仅存 modules 或 merged 不同步导致刷新后表单空。
+ */
+export function flattenProfilePayloadForForm(profile: unknown): Record<string, unknown> {
+  const root = profile;
+  if (!root || typeof root !== "object") return {};
+  const p = root as { merged?: unknown; modules?: unknown };
+  const out: Record<string, unknown> = {};
+  const modRoot = p.modules;
+  if (modRoot && typeof modRoot === "object" && !Array.isArray(modRoot)) {
+    for (const code of PROFILE_MODULE_MERGE_ORDER) {
+      const cfg = (modRoot as Record<string, unknown>)[code];
+      if (cfg != null && typeof cfg === "object" && !Array.isArray(cfg)) {
+        Object.assign(out, cfg as Record<string, unknown>);
+      }
+    }
+  }
+  const merged = p.merged;
+  if (merged != null && typeof merged === "object" && !Array.isArray(merged)) {
+    Object.assign(out, merged as Record<string, unknown>);
+  }
+  return out;
+}
 
 /** 存于 declaration_basic.config，非表单项 */
 export const FORM_STATUS_KEY = "form_status" as const;
@@ -28,6 +61,8 @@ const BASIC_KEYS = new Set([
   "birth_date",
   "id_type_display",
   "id_number",
+  "ethnicity",
+  "political_status",
   "id_pdf",
   "birth_proof_pdf",
   "highest_edu_country",
@@ -42,10 +77,18 @@ const BASIC_KEYS = new Set([
   "work_province",
   "work_unit_detail",
   "unit_attr_display",
+  "unit_level_display",
+  "work_unit_city",
+  "supervising_dept_city",
+  "industry_division",
+  "job_engaged",
+  "title_series_skill",
+  "title_level_skill_rank",
   "tech_title",
   "admin_title",
   "office_level",
   "id_photo",
+  "mobile",
 ]);
 
 const TASK_KEYS = new Set([
@@ -102,6 +145,35 @@ function moduleForKey(key: string): ProfileModuleCode | undefined {
   if (CONTACT_KEYS.has(key)) return PROFILE_MODULE.CONTACT;
   if (SUPERVISOR_KEYS.has(key)) return PROFILE_MODULE.SUPERVISOR;
   return undefined;
+}
+
+/** 由基本信息字段目录构造「语义键 → 模块」映射（用于保存时分块） */
+export function buildCatalogModuleMap(
+  catalog: ProfileFieldCatalogRow[],
+): Map<string, ProfileModuleCode> {
+  const m = new Map<string, ProfileModuleCode>();
+  for (const r of catalog) {
+    m.set(r.field_key, r.module_code as ProfileModuleCode);
+  }
+  return m;
+}
+
+/** 目录优先，未知键回退到内置 moduleForKey */
+export function splitProfileByModuleWithCatalog(
+  values: Record<string, unknown>,
+  catalogMap: Map<string, ProfileModuleCode>,
+): Record<ProfileModuleCode, Record<string, unknown>> {
+  const out: Record<ProfileModuleCode, Record<string, unknown>> = {
+    [PROFILE_MODULE.BASIC]: {},
+    [PROFILE_MODULE.TASK]: {},
+    [PROFILE_MODULE.CONTACT]: {},
+    [PROFILE_MODULE.SUPERVISOR]: {},
+  };
+  for (const key of Object.keys(values)) {
+    const mod = catalogMap.get(key) ?? moduleForKey(key);
+    if (mod) out[mod][key] = values[key];
+  }
+  return out;
 }
 
 /** 将整表单项拆成四个模块，供分块保存 */

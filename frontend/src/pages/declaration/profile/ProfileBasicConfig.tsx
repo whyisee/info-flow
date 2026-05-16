@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Form, Select, Space, Tag, message } from "antd";
-import {
-  putMyModuleConfig,
-} from "../../../services/moduleConfig";
+import { putMyModuleConfig } from "../../../services/moduleConfig";
 import {
   copyMyProfileVersionToDraft,
   getMyProfileVersion,
@@ -11,19 +9,24 @@ import {
   updateMyDraftProfileVersion,
   type ProfileVersionOut,
 } from "../../../services/profileVersions";
-import BaseInfoSection from "./sections/BaseInfoSection";
-import TasksContactSection from "./sections/TasksContactSection";
-import SupervisorsSection from "./sections/SupervisorsSection";
+import { listEnabledProfileFieldCatalog } from "../../../services/profileFieldCatalog";
+import type { ProfileFieldCatalogRow } from "../../../services/profileFieldCatalog";
 import ProfileToc from "./ProfileToc";
+import DynamicProfileSections from "./DynamicProfileSections";
+import { buildProfileTocItems } from "./profileTocItems";
+import { applyCatalogNormalize, applyCatalogSerialize } from "./profileCatalogSerialize";
 import {
   FORM_STATUS_KEY,
   PROFILE_MODULE,
+  buildCatalogModuleMap,
+  flattenProfilePayloadForForm,
   normalizeLoadedProfile,
   serializeProfileForApi,
-  splitProfileByModule,
+  splitProfileByModuleWithCatalog,
   stripFormStatusFromValues,
 } from "./profileModuleFields";
 import "./ProfileBasicConfig.css";
+import { debugProfileForm } from "./profileFormDebug";
 
 export default function ProfileBasicConfig() {
   const [form] = Form.useForm();
@@ -31,6 +34,12 @@ export default function ProfileBasicConfig() {
   const baselineRef = useRef<Record<string, unknown> | null>(null);
   const [versions, setVersions] = useState<ProfileVersionOut[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
+  const [catalog, setCatalog] = useState<ProfileFieldCatalogRow[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const catalogMap = useMemo(() => buildCatalogModuleMap(catalog), [catalog]);
+  const tocItems = useMemo(() => buildProfileTocItems(catalog), [catalog]);
+  const catalogRef = useRef<ProfileFieldCatalogRow[]>([]);
+  catalogRef.current = catalog;
 
   const startEdit = useCallback(() => {
     baselineRef.current = form.getFieldsValue(true);
@@ -47,10 +56,42 @@ export default function ProfileBasicConfig() {
   const loadVersion = useCallback(
     async (versionId: number) => {
       const row = await getMyProfileVersion(versionId);
-      const merged = (row.profile as any)?.merged;
-      const obj = merged && typeof merged === "object" ? (merged as Record<string, unknown>) : {};
-      // 版本是只读快照，不带 form_status
-      form.setFieldsValue(normalizeLoadedProfile(obj));
+      const flatBeforeNorm = flattenProfilePayloadForForm(row.profile);
+      debugProfileForm("loadVersion:raw.profile", row.profile);
+      debugProfileForm("loadVersion:after.flattenProfilePayloadForForm", flatBeforeNorm);
+
+      let next = normalizeLoadedProfile(flatBeforeNorm);
+      debugProfileForm("loadVersion:after.normalizeLoadedProfile", next);
+
+      const cat = catalogRef.current;
+      if (cat.length) {
+        next = applyCatalogNormalize(next, cat);
+        debugProfileForm("loadVersion:after.applyCatalogNormalize", next);
+      } else {
+        debugProfileForm("loadVersion:catalog.empty — 未执行 applyCatalogNormalize，字典字段可能未规范为 string");
+      }
+
+      const dictKeys = cat
+        .filter((r) => r.dict_type_code && (r.data_type === "select" || r.data_type === "multi_select"))
+        .map((r) => ({
+          field_key: r.field_key,
+          dict_type_code: r.dict_type_code,
+          valueInPayload: flatBeforeNorm[r.field_key],
+          valueAfterSet: next[r.field_key],
+        }));
+      debugProfileForm("loadVersion:dictFields.snapshot", dictKeys);
+
+      form.setFieldsValue(next);
+      queueMicrotask(() => {
+        const all = form.getFieldsValue(true) as Record<string, unknown>;
+        const picked: Record<string, unknown> = {};
+        for (const d of dictKeys) {
+          if (Object.prototype.hasOwnProperty.call(all, d.field_key)) {
+            picked[d.field_key] = all[d.field_key];
+          }
+        }
+        debugProfileForm("loadVersion:after.setFieldsValue+microtask(picked dict fields)", picked);
+      });
     },
     [form],
   );
@@ -58,32 +99,51 @@ export default function ProfileBasicConfig() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setCatalogLoading(true);
       try {
-        const vs = await listMyProfileVersions().catch(() => []);
+        const [vs, cat] = await Promise.all([
+          listMyProfileVersions().catch(() => []),
+          listEnabledProfileFieldCatalog().catch(() => {
+            message.error("加载字段配置失败，将使用内置字段分块规则");
+            return [] as ProfileFieldCatalogRow[];
+          }),
+        ]);
         if (cancelled) return;
         setVersions(vs);
+        setCatalog(cat);
+        catalogRef.current = cat;
 
         const latest = vs.length ? vs[0] : null;
         if (latest) {
           setSelectedVersionId(latest.id);
-          await loadVersion(latest.id);
         }
       } catch {
-        /* 网络错误时保留表单 initialValues */
+        /* ignore */
+      } finally {
+        if (!cancelled) setCatalogLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [loadVersion]);
+  }, []);
+
+  /** 字段目录挂载完成后再灌数，避免 Ant Form 控件未挂载时 setFieldsValue 不生效 */
+  useEffect(() => {
+    if (catalogLoading || selectedVersionId == null) return;
+    void loadVersion(selectedVersionId);
+  }, [catalogLoading, selectedVersionId, loadVersion]);
 
   const versionOptions = useMemo(() => {
-    return [
-      ...versions.map((v) => ({
+    return versions.map((v) => {
+      const statusText =
+        v.status === "published" ? "已发布" : v.status === "draft" ? "草稿" : "已归档";
+      /** 与接口路径一致：GET /users/me/profile-versions/{主键id}，勿与业务 version 号混淆 */
+      return {
         value: String(v.id),
-        label: `v${v.version}（${v.status === "published" ? "已发布" : v.status === "draft" ? "草稿" : "已归档"}）`,
-      })),
-    ];
+        label: `版本 v${v.version}（${statusText}）`,
+      };
+    });
   }, [versions]);
 
   const selectedVersion = useMemo(() => {
@@ -103,7 +163,7 @@ export default function ProfileBasicConfig() {
 
   const persistModules = useCallback(
     async (serialized: Record<string, unknown>) => {
-      const byModule = splitProfileByModule(serialized);
+      const byModule = splitProfileByModuleWithCatalog(serialized, catalogMap);
       await Promise.all(
         [
           PROFILE_MODULE.BASIC,
@@ -113,7 +173,18 @@ export default function ProfileBasicConfig() {
         ].map((m) => putMyModuleConfig(m, { config: byModule[m] })),
       );
     },
-    [],
+    [catalogMap],
+  );
+
+  const serializeForSave = useCallback(
+    (values: Record<string, unknown>) => {
+      let serialized = serializeProfileForApi({ ...values });
+      if (catalog.length) {
+        serialized = applyCatalogSerialize(serialized, catalog);
+      }
+      return serialized;
+    },
+    [catalog],
   );
 
   /** 保存草稿：不校验必填 */
@@ -121,11 +192,11 @@ export default function ProfileBasicConfig() {
     try {
       if (!selectedVersionId || !canEditSelected) return;
       const values = form.getFieldsValue(true) as Record<string, unknown>;
-      const serialized = serializeProfileForApi({ ...values });
+      const serialized = serializeForSave(values);
       serialized[FORM_STATUS_KEY] = "draft";
       await persistModules(serialized);
       const { rest } = stripFormStatusFromValues(serialized);
-      const byModule = splitProfileByModule(serialized);
+      const byModule = splitProfileByModuleWithCatalog(serialized, catalogMap);
       await updateMyDraftProfileVersion(selectedVersionId, {
         modules: byModule,
         merged: rest,
@@ -135,29 +206,25 @@ export default function ProfileBasicConfig() {
     } catch {
       message.error("保存失败，请稍后重试");
     }
-  }, [canEditSelected, form, persistModules, selectedVersionId]);
+  }, [canEditSelected, catalogMap, form, persistModules, selectedVersionId, serializeForSave]);
 
   /** 提交：校验全部必填项 */
   const onSubmit = useCallback(async () => {
     try {
       if (!selectedVersionId || !canEditSelected) return;
       const values = await form.validateFields();
-      const serialized = serializeProfileForApi(
-        values as Record<string, unknown>,
-      );
+      const serialized = serializeForSave(values as Record<string, unknown>);
       serialized[FORM_STATUS_KEY] = "submitted";
       await persistModules(serialized);
       const { rest } = stripFormStatusFromValues(serialized);
-      const byModule = splitProfileByModule(serialized);
+      const byModule = splitProfileByModuleWithCatalog(serialized, catalogMap);
       await updateMyDraftProfileVersion(selectedVersionId, {
         modules: byModule,
         merged: rest,
       });
       await publishMyProfileVersion(selectedVersionId);
-      // 重新拉取版本列表，保持下拉最新
       const vs = await listMyProfileVersions().catch(() => []);
       setVersions(vs);
-      // 提交后默认切回最新版本（通常就是刚刚提交的那条）
       if (vs.length) {
         setSelectedVersionId(vs[0].id);
         await loadVersion(vs[0].id).catch(() => undefined);
@@ -172,7 +239,15 @@ export default function ProfileBasicConfig() {
         message.error("提交失败，请稍后重试");
       }
     }
-  }, [canEditSelected, form, loadVersion, persistModules, selectedVersionId]);
+  }, [
+    canEditSelected,
+    catalogMap,
+    form,
+    loadVersion,
+    persistModules,
+    selectedVersionId,
+    serializeForSave,
+  ]);
 
   const onCopyFromPublished = useCallback(async () => {
     try {
@@ -181,22 +256,17 @@ export default function ProfileBasicConfig() {
       const vs = await listMyProfileVersions().catch(() => []);
       setVersions(vs);
       setSelectedVersionId(newDraft.id);
-      await loadVersion(newDraft.id).catch(() => undefined);
       baselineRef.current = form.getFieldsValue(true);
       setEditing(true);
       message.success("已基于当前版本创建草稿");
     } catch {
       message.error("创建草稿失败，请稍后重试");
     }
-  }, [canCopySelected, form, loadVersion, selectedVersionId]);
+  }, [canCopySelected, form, selectedVersionId]);
 
   return (
     <div className="profileBasicConfig">
-      {/* 全宽吸顶：与下方「主列+TOC」同宽，按钮贴卡片最右侧（含 TOC 列上方区域） */}
-      <div
-        className="profilePageHeader profileFirstSectionHeader profileAnchor"
-        id="profile-section-basic"
-      >
+      <div className="profilePageHeader profileFirstSectionHeader">
         <div className="profilePageHeaderTitleGroup">
           <h2 className="profileSectionTitle profileSectionTitlePrimary">
             基本信息
@@ -211,14 +281,12 @@ export default function ProfileBasicConfig() {
             value={selectedVersionId != null ? String(selectedVersionId) : undefined}
             options={versionOptions}
             style={{ width: 220 }}
-            onChange={async (v) => {
-              // 切换版本时强制退出编辑态
+            onChange={(v) => {
               setEditing(false);
               baselineRef.current = null;
               const id = Number(v);
               if (!Number.isFinite(id) || id <= 0) return;
               setSelectedVersionId(id);
-              await loadVersion(id).catch(() => undefined);
             }}
           />
           {!editing ? (
@@ -253,24 +321,15 @@ export default function ProfileBasicConfig() {
             className="profileBasicForm"
             labelCol={{ flex: "0 0 160px" }}
             wrapperCol={{ flex: "1" }}
-            initialValues={{
-              recommend_school: "东北石油大学",
-              full_name: "xx",
-              project_name: "特聘教授",
-              gender: "male",
-              nationality: undefined,
-              id_type_display: "id_card",
-              id_number: "",
-              unit_attr_display: "本校",
-              office_level: "none",
-            }}
           >
-            <BaseInfoSection editing={editing} />
-            <TasksContactSection editing={editing} />
-            <SupervisorsSection />
+            <DynamicProfileSections
+              catalog={catalog}
+              editing={editing && !!canEditSelected}
+              loading={catalogLoading}
+            />
           </Form>
         </div>
-        <ProfileToc />
+        <ProfileToc items={tocItems} />
       </div>
     </div>
   );

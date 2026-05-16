@@ -19,10 +19,22 @@ from app.services.project_effective_approval_flow import get_effective_project_f
 
 LEGACY_STEP_COUNT = 3
 REJECTED_STATUS = 5
+WF_DRAFT = "draft"
+WF_REVIEWING = "reviewing"
+WF_APPROVED = "approved"
+WF_RETURNED = "returned"
+WF_REJECTED = "rejected"
+WF_CANCELLED = "cancelled"
 
 __all__ = [
     "LEGACY_STEP_COUNT",
     "REJECTED_STATUS",
+    "WF_DRAFT",
+    "WF_REVIEWING",
+    "WF_APPROVED",
+    "WF_RETURNED",
+    "WF_REJECTED",
+    "WF_CANCELLED",
     "approvers_signed_lane",
     "assignees_all_for_current_step",
     "assignees_for_current_step",
@@ -33,6 +45,7 @@ __all__ = [
     "is_fully_approved",
     "is_legacy_material",
     "is_rejected",
+    "workflow_status",
     "step_count",
     "step_fully_signed",
     "user_has_signed_lane",
@@ -55,21 +68,44 @@ def done_status_value(material: ApplyMaterial) -> int:
     return step_count(material) + 1
 
 
+def workflow_status(material: ApplyMaterial) -> str:
+    raw = getattr(material, "workflow_status", None)
+    if isinstance(raw, str) and raw:
+        return raw
+    if material.status == 0:
+        return WF_DRAFT
+    if material.status == REJECTED_STATUS:
+        return WF_REJECTED
+    if material.status == done_status_value(material):
+        return WF_APPROVED
+    return WF_REVIEWING
+
+
 def is_legacy_material(material: ApplyMaterial) -> bool:
     return material.approval_snapshot is None
 
 
 def is_fully_approved(material: ApplyMaterial) -> bool:
+    raw = getattr(material, "workflow_status", None)
+    if isinstance(raw, str) and raw:
+        return raw == WF_APPROVED
     return material.status == done_status_value(material)
 
 
 def is_rejected(material: ApplyMaterial) -> bool:
+    raw = getattr(material, "workflow_status", None)
+    if isinstance(raw, str) and raw:
+        return raw == WF_REJECTED
     return material.status == REJECTED_STATUS
 
 
 def current_step_index(material: ApplyMaterial) -> int | None:
-    if material.status == 0 or is_rejected(material) or is_fully_approved(material):
+    if workflow_status(material) != WF_REVIEWING or is_rejected(material) or is_fully_approved(material):
         return None
+    explicit = getattr(material, "current_step_index", None)
+    n = step_count(material)
+    if isinstance(explicit, int) and 0 <= explicit < n:
+        return explicit
     n = step_count(material)
     if 1 <= material.status <= n:
         return material.status - 1

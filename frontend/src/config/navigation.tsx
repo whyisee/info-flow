@@ -9,7 +9,6 @@ import {
   UserOutlined,
   FormOutlined,
   EditOutlined,
-  FileDoneOutlined,
   DownloadOutlined,
   SettingOutlined,
   FolderOpenOutlined,
@@ -20,9 +19,10 @@ import {
   KeyOutlined,
   IdcardOutlined,
   DatabaseOutlined,
+  QuestionCircleOutlined,
 } from "@ant-design/icons";
 
-export type TopMenuKey = "declaration" | "survey" | "system";
+export type TopMenuKey = "declaration" | "survey" | "system" | "help";
 
 /** 侧栏叶子：对应具体路由 */
 export interface SideMenuLeaf {
@@ -48,6 +48,7 @@ export const TOP_MENUS: { key: TopMenuKey; label: string }[] = [
   { key: "declaration", label: "申报" },
   { key: "survey", label: "问卷" },
   { key: "system", label: "系统" },
+  { key: "help", label: "帮助" },
 ];
 
 const SIDE_MENUS: Record<TopMenuKey, SideMenuEntry[]> = {
@@ -57,6 +58,12 @@ const SIDE_MENUS: Record<TopMenuKey, SideMenuEntry[]> = {
       label: "首页",
       icon: <DashboardOutlined />,
       permissions: ["declaration:dashboard:view"],
+    },
+    {
+      path: "/teacher/workbench",
+      label: "教师工作台",
+      icon: <FileTextOutlined />,
+      permissions: ["declaration:material:fill"],
     },
     {
       key: "decl-profile",
@@ -76,6 +83,12 @@ const SIDE_MENUS: Record<TopMenuKey, SideMenuEntry[]> = {
       label: "申报业务",
       icon: <FolderOpenOutlined />,
       children: [
+        {
+          path: "/declaration/admin-dashboard",
+          label: "数据看板",
+          icon: <PieChartOutlined />,
+          permissions: ["declaration:project:manage"],
+        },
         {
           path: "/declaration/projects",
           label: "项目管理",
@@ -98,8 +111,20 @@ const SIDE_MENUS: Record<TopMenuKey, SideMenuEntry[]> = {
           ],
         },
         {
+          path: "/declaration/config-templates",
+          label: "配置模板库",
+          icon: <SnippetsOutlined />,
+          permissions: ["declaration:template:manage"],
+        },
+        {
+          path: "/declaration/audit-logs",
+          label: "审计日志",
+          icon: <DatabaseOutlined />,
+          permissions: ["declaration:project:manage"],
+        },
+        {
           path: "/declaration/templates",
-          label: "模板管理",
+          label: "文件模板",
           icon: <SnippetsOutlined />,
           permissions: ["declaration:template:manage"],
         },
@@ -183,7 +208,21 @@ const SIDE_MENUS: Record<TopMenuKey, SideMenuEntry[]> = {
           icon: <DatabaseOutlined />,
           permissions: ["system:dict:manage"],
         },
+        {
+          path: "/system/profile-fields",
+          label: "基本信息字段",
+          icon: <FormOutlined />,
+          permissions: ["system:profile-field:manage"],
+        },
       ],
+    },
+  ],
+  help: [
+    {
+      path: "/help",
+      label: "帮助中心",
+      icon: <QuestionCircleOutlined />,
+      permissions: ["system:help:view", "system:help:manage"],
     },
   ],
 };
@@ -195,6 +234,7 @@ export function getSideMenuForTop(top: TopMenuKey): SideMenuEntry[] {
 export function getTopFromPath(pathname: string): TopMenuKey {
   if (pathname.startsWith("/survey")) return "survey";
   if (pathname.startsWith("/system")) return "system";
+  if (pathname.startsWith("/help")) return "help";
   return "declaration";
 }
 

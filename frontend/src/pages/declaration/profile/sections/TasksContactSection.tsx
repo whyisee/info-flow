@@ -396,15 +396,6 @@ export default function TasksContactSection({ editing }: TasksContactSectionProp
 
       <Row gutter={[24, 16]} wrap className="profileFormGrid">
         <Col xs={24} lg={12} className="profileFormCol">
-          <Form.Item
-            label="手机号码"
-            name="mobile"
-            rules={[{ required: true, message: "请填写手机号" }]}
-          >
-            <Input placeholder="11 位手机号" />
-          </Form.Item>
-        </Col>
-        <Col xs={24} lg={12} className="profileFormCol">
           <Form.Item label="家庭电话" name="phone_home">
             <Input placeholder="选填" />
           </Form.Item>

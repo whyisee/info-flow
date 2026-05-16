@@ -1,6 +1,5 @@
 import {
   Button,
-  Form,
   Input,
   InputNumber,
   Select,
@@ -15,7 +14,7 @@ import {
   PlusOutlined,
   UpOutlined,
 } from "@ant-design/icons";
-import type { FieldDef, FormNode } from "../../../features/form-designer/types";
+import type { FieldDef, FieldType, FormNode } from "../../../features/form-designer/types";
 import { findNode, updateNode } from "./schemaOps";
 
 const FIELD_TYPE_OPTIONS = [
@@ -57,12 +56,23 @@ export function FormDesignerInspector({
     onSchemaChange(updateNode(schema, node.id, patch));
   };
 
+  const getFieldName = () => (node?.kind === "Field" ? node.name : "");
+  const getFieldType = (fallback: FieldType = "input"): FieldType => {
+    if (node?.kind !== "Field") return fallback;
+    return (node.fieldType || fallback) as FieldType;
+  };
+  const makeBaseFieldDef = (type?: FieldType): FieldDef => ({
+    name: getFieldName(),
+    label: node?.kind === "Field" ? node.title || "" : "",
+    type: type ?? getFieldType(),
+  });
+
   if (!node) {
     return (
       <div
         style={{
           position: "fixed",
-          top: 70,
+          top: 150,
           right: 16,
           width: 260,
           background: "#fff",
@@ -84,7 +94,7 @@ export function FormDesignerInspector({
     <div
       style={{
         position: "fixed",
-        top: 70,
+        top: 150,
         right: 16,
         width: 280,
         background: "#fff",
@@ -187,11 +197,7 @@ export function FormDesignerInspector({
                   onChange={(e) => {
                     const next = { ...fields };
                     const name = (node as any).name;
-                    const base = fieldDef ?? {
-                      name,
-                      label: "",
-                      type: (node as any).fieldType || "input",
-                    };
+                    const base = fieldDef ?? makeBaseFieldDef();
                     next[name] = { ...base, label: e.target.value, name };
                     onFieldsChange(next);
                   }}
@@ -211,11 +217,7 @@ export function FormDesignerInspector({
                   onChange={(e) => {
                     const next = { ...fields };
                     const name = (node as any).name;
-                    const base = fieldDef ?? {
-                      name,
-                      label: (node as any).title || "",
-                      type: (node as any).fieldType || "input",
-                    };
+                    const base = fieldDef ?? makeBaseFieldDef();
                     next[name] = { ...base, description: e.target.value, name };
                     onFieldsChange(next);
                   }}
@@ -253,11 +255,7 @@ export function FormDesignerInspector({
                           onChange={(e) => {
                             const next = { ...fields };
                             const name = (node as any).name;
-                            const base = fieldDef ?? {
-                              name,
-                              label: (node as any).title || "",
-                              type: (node as any).fieldType,
-                            };
+                            const base = fieldDef ?? makeBaseFieldDef();
                             const newOptions = [...(base.options ?? [])];
                             newOptions[i] = {
                               ...newOptions[i],
@@ -276,11 +274,7 @@ export function FormDesignerInspector({
                           onChange={(e) => {
                             const next = { ...fields };
                             const name = (node as any).name;
-                            const base = fieldDef ?? {
-                              name,
-                              label: (node as any).title || "",
-                              type: (node as any).fieldType,
-                            };
+                            const base = fieldDef ?? makeBaseFieldDef();
                             const newOptions = [...(base.options ?? [])];
                             newOptions[i] = {
                               ...newOptions[i],
@@ -299,11 +293,7 @@ export function FormDesignerInspector({
                           onClick={() => {
                             const next = { ...fields };
                             const name = (node as any).name;
-                            const base = fieldDef ?? {
-                              name,
-                              label: (node as any).title || "",
-                              type: (node as any).fieldType,
-                            };
+                            const base = fieldDef ?? makeBaseFieldDef();
                             const newOptions = (base.options ?? []).filter(
                               (_, j) => j !== i,
                             );
@@ -320,11 +310,7 @@ export function FormDesignerInspector({
                       onClick={() => {
                         const next = { ...fields };
                         const name = (node as any).name;
-                        const base = fieldDef ?? {
-                          name,
-                          label: (node as any).title || "",
-                          type: (node as any).fieldType,
-                        };
+                        const base = fieldDef ?? makeBaseFieldDef();
                         const newOptions = [
                           ...(base.options ?? []),
                           {
@@ -367,11 +353,7 @@ export function FormDesignerInspector({
                         onChange={(e) => {
                           const next = { ...fields };
                           const name = (node as any).name;
-                          const base = fieldDef ?? {
-                            name,
-                            label: (node as any).title || "",
-                            type: "attachment",
-                          };
+                          const base = fieldDef ?? makeBaseFieldDef("attachment");
                           next[name] = {
                             ...base,
                             attachment: {
@@ -398,11 +380,7 @@ export function FormDesignerInspector({
                         onChange={(v) => {
                           const next = { ...fields };
                           const name = (node as any).name;
-                          const base = fieldDef ?? {
-                            name,
-                            label: (node as any).title || "",
-                            type: "attachment",
-                          };
+                          const base = fieldDef ?? makeBaseFieldDef("attachment");
                           next[name] = {
                             ...base,
                             attachment: {
@@ -445,11 +423,7 @@ export function FormDesignerInspector({
                         onChange={(v) => {
                           const next = { ...fields };
                           const name = (node as any).name;
-                          const base = fieldDef ?? {
-                            name,
-                            label: (node as any).title || "",
-                            type: "list",
-                          };
+                          const base = fieldDef ?? makeBaseFieldDef("list");
                           next[name] = {
                             ...base,
                             list: { ...base.list, maxRows: v ?? 10 },
@@ -484,11 +458,7 @@ export function FormDesignerInspector({
                   onChange={(checked) => {
                     const next = { ...fields };
                     const name = (node as any).name;
-                    const base = fieldDef ?? {
-                      name,
-                      label: (node as any).title || "",
-                      type: (node as any).fieldType || "input",
-                    };
+                    const base = fieldDef ?? makeBaseFieldDef();
                     next[name] = {
                       ...base,
                       rules: { ...(base.rules ?? {}), required: checked },

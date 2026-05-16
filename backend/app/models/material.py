@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import BigInteger, DateTime, Integer, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +22,16 @@ class ApplyMaterial(Base):
         Integer,
         default=0,
         comment="0=draft;1..n 第k环节进行中(n=环节数);n+1=办结;5=驳回。无 approval_snapshot 时 n=3(legacy)",
+    )
+    workflow_status: Mapped[str] = mapped_column(
+        String(20),
+        default="draft",
+        comment="draft/reviewing/approved/returned/rejected/cancelled",
+    )
+    current_step_index: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="reviewing 时的当前顶层审批环节序号，从 0 开始",
     )
     """提交时从项目复制的审批流，环节数/会签人以此为准，避免项目后续改配置影响在途单。"""
     approval_snapshot: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)

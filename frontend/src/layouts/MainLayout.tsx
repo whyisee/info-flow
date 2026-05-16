@@ -247,6 +247,7 @@ export default function MainLayout() {
     );
     navigate(path);
   };
+  const showMainSider = activeTop !== "help";
 
   return (
     <Layout className="appShell">
@@ -338,40 +339,42 @@ export default function MainLayout() {
           </Dropdown>
         </div>
       </Header>
-      <Layout hasSider className="mainWorkArea">
-        <Sider
-          trigger={null}
-          collapsible
-          collapsed={collapsed}
-          onCollapse={setCollapsed}
-          width={220}
-          collapsedWidth={72}
-          className="mainSider"
-        >
-          <button
-            type="button"
-            className="mainSiderCollapseBtn mainSiderEdgeTrigger"
-            onClick={() => setCollapsed(!collapsed)}
-            aria-label={collapsed ? "展开侧栏" : "收起侧栏"}
+      <Layout hasSider={showMainSider} className="mainWorkArea">
+        {showMainSider ? (
+          <Sider
+            trigger={null}
+            collapsible
+            collapsed={collapsed}
+            onCollapse={setCollapsed}
+            width={220}
+            collapsedWidth={72}
+            className="mainSider"
           >
-            <CaretLeftOutlined
-              aria-hidden
-              className={`mainSiderCollapseCaret ${collapsed ? "mainSiderCollapseCaretFlipped" : ""}`}
-            />
-          </button>
-          <div className="mainSiderMenuScroll">
-            <Menu
-              mode="inline"
-              inlineCollapsed={collapsed}
-              openKeys={sideOpenKeys}
-              onOpenChange={setSideOpenKeys}
-              selectedKeys={[getMenuSelectedKey(activeTabPath)]}
-              items={sideMenuItems}
-              onClick={({ key }) => navigate(String(key))}
-              className="mainSiderMenu"
-            />
-          </div>
-        </Sider>
+            <button
+              type="button"
+              className="mainSiderCollapseBtn mainSiderEdgeTrigger"
+              onClick={() => setCollapsed(!collapsed)}
+              aria-label={collapsed ? "展开侧栏" : "收起侧栏"}
+            >
+              <CaretLeftOutlined
+                aria-hidden
+                className={`mainSiderCollapseCaret ${collapsed ? "mainSiderCollapseCaretFlipped" : ""}`}
+              />
+            </button>
+            <div className="mainSiderMenuScroll">
+              <Menu
+                mode="inline"
+                inlineCollapsed={collapsed}
+                openKeys={sideOpenKeys}
+                onOpenChange={setSideOpenKeys}
+                selectedKeys={[getMenuSelectedKey(activeTabPath)]}
+                items={sideMenuItems}
+                onClick={({ key }) => navigate(String(key))}
+                className="mainSiderMenu"
+              />
+            </div>
+          </Sider>
+        ) : null}
         <Content className="mainContentOuter">
           <div className="mainContentPanel">
             <MainLayoutTabStrip

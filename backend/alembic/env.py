@@ -34,6 +34,11 @@ def run_migrations_online():
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args={
+            "connect_timeout": settings.DB_CONNECT_TIMEOUT_SECONDS,
+            "read_timeout": settings.DB_READ_TIMEOUT_SECONDS,
+            "write_timeout": settings.DB_WRITE_TIMEOUT_SECONDS,
+        },
     )
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)

@@ -38,7 +38,7 @@ function FlowApprovalNodeInner({ id, data, selected }: NodeProps) {
   const n = d.assignee_user_ids?.length ?? 0
   let meta: string
   if (src === 'explicit_users') {
-    meta = n > 0 ? `${n} 人 · ${vm}` : `未选人 · ${vm}（发布后走角色）`
+    meta = n > 0 ? `${n} 人 · ${vm}` : `未选人 · ${vm}`
   } else if (src === 'dept_admins') {
     meta = `部门 ${d.dept_id ?? '?'} · ${vm}`
   } else {

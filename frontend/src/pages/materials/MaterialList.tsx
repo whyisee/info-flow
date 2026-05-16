@@ -35,7 +35,7 @@ const MATERIAL_STATUS_FILTER_OPTIONS = [
   { value: 0 as const, label: "草稿" },
   { value: "in" as const, label: "审批中" },
   { value: "done" as const, label: "已通过" },
-  { value: 5 as const, label: "已驳回" },
+  { value: 5 as const, label: "已退回/驳回" },
 ];
 
 function formatDateTime(iso: string | undefined | null): string {
@@ -49,6 +49,14 @@ type MaterialListAppliedFilter = {
   project_id: number | "all" | undefined;
   status: number | "all" | "in" | "done";
 };
+
+function toMaterialListQuery(filter: MaterialListAppliedFilter): materialService.MaterialListQuery {
+  return {
+    keyword: filter.keyword || undefined,
+    project_id: typeof filter.project_id === "number" ? filter.project_id : undefined,
+    status_filter: filter.status,
+  };
+}
 
 function buildAppliedFilter(values: {
   keyword?: string;
@@ -83,14 +91,14 @@ export default function MaterialList() {
   const [filterForm] = Form.useForm();
   const navigate = useNavigate();
 
-  const loadMaterials = useCallback(() => {
+  const loadMaterials = useCallback((filter: MaterialListAppliedFilter = appliedFilter) => {
     setLoading(true);
     materialService
-      .getMaterials()
+      .getMaterials(toMaterialListQuery(filter))
       .then(setMaterials)
       .catch(() => message.error("获取申报列表失败"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [appliedFilter]);
 
   useEffect(() => {
     loadMaterials();
@@ -131,43 +139,61 @@ export default function MaterialList() {
     return m;
   }, [projects]);
 
-  const filteredMaterials = useMemo(() => {
-    const kw = appliedFilter.keyword.toLowerCase();
-    return materials.filter((row) => {
-      if (appliedFilter.project_id !== "all" && row.project_id !== appliedFilter.project_id) {
-        return false;
-      }
-      if (appliedFilter.status !== "all") {
-        if (appliedFilter.status === "in") {
-          if (!isMaterialInReview(row)) return false;
-        } else if (appliedFilter.status === "done") {
-          if (!isMaterialDone(row)) return false;
-        } else if (row.status !== appliedFilter.status) {
-          return false;
-        }
-      }
-      if (!kw) return true;
-      const p = projectById.get(row.project_id);
-      const blob = [
-        String(row.id),
-        p?.name,
-        p?.description ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      return blob.includes(kw);
-    });
-  }, [materials, appliedFilter, projectById]);
-
   const onFilterSearch = () => {
     const values = filterForm.getFieldsValue();
-    setAppliedFilter(buildAppliedFilter(values));
+    const nextFilter = buildAppliedFilter(values);
+    setAppliedFilter(nextFilter);
+    loadMaterials(nextFilter);
   };
 
   const onFilterReset = () => {
     filterForm.resetFields();
     filterForm.setFieldsValue({ project_id: "all", status: "all" });
-    setAppliedFilter({ keyword: "", project_id: "all", status: "all" });
+    const nextFilter: MaterialListAppliedFilter = { keyword: "", project_id: "all", status: "all" };
+    setAppliedFilter(nextFilter);
+    loadMaterials(nextFilter);
+  };
+
+  const refreshCurrentPage = () => {
+    loadMaterials(appliedFilter);
+  };
+
+  const cancelMaterial = (record: Material) => {
+    Modal.confirm({
+      title: "取消申报",
+      content: "取消后材料会退回草稿状态，已产生的审批记录将清除，确认取消？",
+      okText: "确认取消",
+      cancelText: "再想想",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await materialService.cancelMaterial(record.id);
+          message.success("已取消申报");
+          refreshCurrentPage();
+        } catch {
+          message.error("取消失败");
+        }
+      },
+    });
+  };
+
+  const deleteMaterial = (record: Material) => {
+    Modal.confirm({
+      title: "删除申报",
+      content: "删除后不可恢复，确认删除这条申报？",
+      okText: "确认删除",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await materialService.deleteMaterial(record.id);
+          message.success("已删除");
+          refreshCurrentPage();
+        } catch {
+          message.error("删除失败");
+        }
+      },
+    });
   };
 
   const columns = [
@@ -196,6 +222,12 @@ export default function MaterialList() {
       },
     },
     {
+      title: "创建人",
+      key: "creator_name",
+      width: 120,
+      render: (_: unknown, r: Material) => r.creator_name || `用户 #${r.user_id}`,
+    },
+    {
       title: "项目创建时间",
       key: "project_created",
       width: 168,
@@ -209,11 +241,11 @@ export default function MaterialList() {
       width: 140,
       render: (_: number, r: Material) => {
         const n = materialStepCount(r);
-        const label = materialStatusLabel(r.status, n);
+        const label = materialStatusLabel(r.status, n, r.workflow_status, r.current_step_index);
         const color =
-          r.status === 0
+          r.workflow_status === "draft" || r.status === 0
             ? "default"
-            : r.status === 5
+            : r.workflow_status === "returned" || r.workflow_status === "rejected" || r.status === 5
               ? "red"
               : isMaterialDone(r)
                 ? "green"
@@ -238,13 +270,32 @@ export default function MaterialList() {
     {
       title: "操作",
       key: "action",
-      width: 88,
+      width: 176,
       fixed: "right" as const,
-      render: (_: unknown, record: Material) => (
-        <Button type="link" size="small" onClick={() => navigate(`/declaration/materials/${record.id}`)}>
-          {record.status === 0 ? "编辑" : "查看"}
-        </Button>
-      ),
+      render: (_: unknown, record: Material) => {
+        const canCancel = isMaterialInReview(record);
+        const canDelete =
+          record.workflow_status != null
+            ? ["draft", "returned", "rejected", "cancelled"].includes(record.workflow_status)
+            : record.status === 0 || record.status === 5;
+        return (
+          <Space size={4}>
+            <Button type="link" size="small" onClick={() => navigate(`/declaration/materials/${record.id}`)}>
+              {canDelete ? "编辑" : "查看"}
+            </Button>
+            {canCancel ? (
+              <Button type="link" size="small" danger onClick={() => cancelMaterial(record)}>
+                取消
+              </Button>
+            ) : null}
+            {canDelete ? (
+              <Button type="link" size="small" danger onClick={() => deleteMaterial(record)}>
+                删除
+              </Button>
+            ) : null}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -315,10 +366,10 @@ export default function MaterialList() {
       <Table
         className="materialListTable"
         columns={columns}
-        dataSource={filteredMaterials}
+        dataSource={materials}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1180 }}
+        scroll={{ x: 1300 }}
       />
 
       <Modal
@@ -413,7 +464,12 @@ export default function MaterialList() {
                 <li key={m.id}>
                   <Typography.Text type="secondary" style={{ fontSize: 13 }}>
                     申报 #{m.id} · 创建于 {formatDateTime(m.created_at)} ·{" "}
-                    {materialStatusLabel(m.status, materialStepCount(m))}
+                    {materialStatusLabel(
+                      m.status,
+                      materialStepCount(m),
+                      m.workflow_status,
+                      m.current_step_index,
+                    )}
                   </Typography.Text>
                 </li>
               ))}

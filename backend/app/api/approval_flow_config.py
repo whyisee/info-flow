@@ -47,15 +47,15 @@ def _validate_draft_flow(flow: dict | None) -> dict:
 
 
 def _normalize_publish_flow(flow: dict | None) -> dict | None:
-    """至少一处配置了审批人来源时落库；否则 null（走角色）。发布前校验名称与各来源必填项。"""
+    """发布前校验名称与各来源必填项；发布后流程必须可执行，不再回退旧角色逻辑。"""
     if not flow or not isinstance(flow, dict):
-        return None
+        raise HTTPException(status_code=400, detail="审批流不能为空")
     try:
         cfg = ApprovalFlowConfig.model_validate(flow)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"审批流格式无效: {e}") from e
     if not flow_has_any_configured_leaf(cfg):
-        return None
+        raise HTTPException(status_code=400, detail="审批流至少需要配置一个有效审批环节")
     for step in cfg.steps:
         if isinstance(step, ApprovalStepLinear):
             if not str(step.title or "").strip():

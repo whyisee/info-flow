@@ -281,7 +281,7 @@ export default function SurveyExport() {
                                 )}
                               </span>
                             );
-                          }) : <span>{val}</span>
+                          }) : <span>{String(val ?? "")}</span>
                         )
                         : displayValue || "（未填写）"}
                     </div>

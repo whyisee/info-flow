@@ -2,6 +2,282 @@
   padding-right: 2px;
 }
 
+.declCfgVisualWorkbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 14px;
+  align-items: start;
+}
+
+.declCfgVisualPreviewPane,
+.declCfgVisualInspectorPane {
+  min-width: 0;
+}
+
+.declCfgVisualPreviewPane {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 190px);
+  overflow: hidden;
+  border: 1px solid #e7edf3;
+  background: #fff;
+}
+
+.declCfgVisualPaneHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf1f5;
+  background: #fbfcfe;
+}
+
+.declCfgVisualPaneHead > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.declCfgVisualPaneHead .ant-typography-secondary {
+  font-size: 12px;
+}
+
+.declCfgVisualPreviewScroller {
+  max-height: calc(100vh - 246px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+}
+
+.declCfgVisualPrintCanvas {
+  width: 100%;
+  min-width: 0;
+}
+
+.declCfgVisualPrintCanvas .declCfgRender,
+.declCfgVisualPrintCanvas .declCfgRenderPrintFlow {
+  width: 100%;
+  min-width: 0;
+}
+
+.declCfgVisualPrintCanvas .declCfgRenderPrintMapWrap,
+.declCfgVisualPrintCanvas .declCfgRenderPrintListWrap {
+  overflow-x: visible;
+}
+
+.declCfgVisualPrintCanvas .declCfgRenderPrintMap,
+.declCfgVisualPrintCanvas .declCfgRenderPrintList,
+.declCfgVisualPrintCanvas .declCfgRenderProfilePrint,
+.declCfgVisualPrintCanvas .declCfgProfileLayoutPreview {
+  width: 100%;
+  min-width: 0;
+}
+
+.declCfgDesignEditableHead {
+  position: relative;
+  cursor: grab;
+}
+
+.declCfgDesignEditableHead:active {
+  cursor: grabbing;
+}
+
+.declCfgDesignEditableHeadActive {
+  background: #f3f8ff;
+  box-shadow: inset 0 0 0 2px var(--ant-color-primary, #1677ff);
+}
+
+.declCfgDesignSectionShell {
+  cursor: pointer;
+}
+
+.declCfgDesignSectionActive {
+  box-shadow: 0 0 0 2px var(--ant-color-primary, #1677ff);
+  position: relative;
+  z-index: 1;
+}
+
+.declCfgDesignEditableHead:hover .declCfgListPrintSpanTools {
+  opacity: 1;
+}
+
+.declCfgDesignFormRefPlaceholder {
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid #222;
+  border-top: 0;
+  background: #fff;
+  font-weight: 600;
+  text-align: center;
+}
+
+.declCfgVisualInspectorPane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.declCfgProfileBindingCard.ant-card {
+  margin-bottom: 12px;
+  border: 1px solid #e7edf3;
+  background: #fbfcfe;
+}
+
+.declCfgProfileBindingCard > .ant-card-body {
+  padding: 12px;
+}
+
+.declCfgProfileBindingEnabled.ant-form-item {
+  margin-bottom: 0;
+}
+
+.declCfgProfileCompactControls {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.declCfgProfileBindingPicker {
+  width: 100%;
+}
+
+.declCfgProfileFieldTable {
+  overflow-x: auto;
+}
+
+.declCfgProfileFieldHeader,
+.declCfgProfileFieldRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(120px, 1fr) minmax(120px, 0.9fr) 64px 112px 56px;
+  gap: 8px 10px;
+  align-items: center;
+  min-width: 760px;
+}
+
+.declCfgProfileFieldHeader {
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #edf1f5;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+
+.declCfgProfileFieldRow {
+  margin-bottom: 6px;
+}
+
+.declCfgProfileFieldName {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.declCfgProfileFieldName .ant-typography {
+  margin: 0;
+}
+
+.declCfgProfileLayout {
+  padding-top: 4px;
+}
+
+.declCfgProfileLayoutToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.declCfgProfileLayoutColumnsLabel {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+
+.declCfgProfileLayoutColumns {
+  width: 76px;
+}
+
+.declCfgProfileLayoutPreview {
+  display: grid;
+  width: 100%;
+  border-top: 1px solid #222;
+  border-left: 1px solid #222;
+  background: #fff;
+}
+
+.declCfgProfileLayoutPreviewLabel,
+.declCfgProfileLayoutPreviewValue {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  border-right: 1px solid #222;
+  border-bottom: 1px solid #222;
+  cursor: grab;
+}
+
+.declCfgProfileLayoutPreviewLabel:active,
+.declCfgProfileLayoutPreviewValue:active {
+  cursor: grabbing;
+}
+
+.declCfgProfileLayoutPreviewLabel {
+  justify-content: center;
+  padding: 6px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.declCfgProfileLayoutPreviewValue {
+  min-width: 0;
+  padding: 6px;
+}
+
+.declCfgProfileLayoutSpanTools {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #d9e2ec;
+  background: rgba(255, 255, 255, 0.96);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.declCfgProfileLayoutPreviewLabel:hover .declCfgProfileLayoutSpanTools,
+.declCfgProfileLayoutPreviewValue:hover .declCfgProfileLayoutSpanTools {
+  opacity: 1;
+}
+
+.declCfgProfileLayoutSpanTools button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: #f3f6fa;
+  color: rgba(0, 0, 0, 0.75);
+  cursor: pointer;
+  line-height: 20px;
+}
+
+.declCfgProfileLayoutSpanTools button:disabled {
+  color: rgba(0, 0, 0, 0.25);
+  cursor: not-allowed;
+}
+
+.declCfgProfileLayoutSpanTools > span {
+  min-width: 18px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
 .declCfgVisualModuleTabs {
   width: 100%;
 }
@@ -91,7 +367,7 @@
 
 .declCfgVisualColumnGrid {
   display: grid;
-  grid-template-columns: minmax(120px, 1.2fr) 128px minmax(96px, 0.85fr) 56px;
+  grid-template-columns: minmax(120px, 1.2fr) 128px minmax(88px, 0.8fr) 88px 56px;
   gap: 8px 10px;
   align-items: start;
 }
@@ -124,6 +400,419 @@
 
 .declCfgVisualNumFull {
   width: 100%;
+}
+
+.declCfgListDesigner {
+  margin-top: 8px;
+}
+
+.declCfgListDesignerInner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 14px;
+  align-items: start;
+}
+
+.declCfgVisualInspectorPane .declCfgListDesignerInner,
+.declCfgVisualInspectorPane .declCfgMapDesignerInner {
+  display: block;
+}
+
+.declCfgVisualInspectorPane .declCfgListCanvas,
+.declCfgVisualInspectorPane .declCfgMapCanvas {
+  display: none;
+}
+
+.declCfgListCanvas {
+  min-width: 0;
+}
+
+.declCfgListCanvasHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.declCfgListCanvasHeader > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.declCfgListCanvasHeader .ant-typography-secondary {
+  font-size: 12px;
+}
+
+.declCfgListPrintPreviewWrap {
+  overflow-x: auto;
+}
+
+.declCfgListPrintPreview {
+  display: grid;
+  min-width: 720px;
+  overflow: hidden;
+  border-top: 1px solid #222;
+  border-left: 1px solid #222;
+  background: #fff;
+}
+
+.declCfgListPrintTitleCell,
+.declCfgListPrintLeftTitleCell,
+.declCfgListPrintHeadCell,
+.declCfgListPrintBodyCell,
+.declCfgListPrintEmpty,
+.declCfgListPrintRowFiller {
+  min-width: 0;
+  min-height: 34px;
+  border-right: 1px solid #222;
+  border-bottom: 1px solid #222;
+}
+
+.declCfgListPrintTitleCell,
+.declCfgListPrintLeftTitleCell,
+.declCfgListPrintHeadCell,
+.declCfgListPrintEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.declCfgListPrintTitleCell {
+  min-height: 38px;
+}
+
+.declCfgListPrintLeftTitleCell {
+  padding: 8px;
+  white-space: pre-line;
+}
+
+.declCfgListPrintHeadCell {
+  position: relative;
+  cursor: grab;
+}
+
+.declCfgListPrintHeadCellActive {
+  background: #f3f8ff;
+  box-shadow: inset 0 0 0 2px var(--ant-color-primary, #1677ff);
+}
+
+.declCfgListPrintHeadFiller {
+  background: #fafafa;
+}
+
+.declCfgListPrintHeadCell:active {
+  cursor: grabbing;
+}
+
+.declCfgListPrintHeadCell > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.declCfgListPrintSpanTools {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-grid;
+  grid-template-columns: 22px 16px;
+  grid-template-rows: 14px 14px;
+  align-items: center;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid #d9e2ec;
+  background: rgba(255, 255, 255, 0.96);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.declCfgListPrintHeadCell:hover .declCfgListPrintSpanTools {
+  opacity: 1;
+}
+
+.declCfgListPrintSpanTools button {
+  width: 16px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  background: #f3f6fa;
+  color: rgba(0, 0, 0, 0.75);
+  cursor: pointer;
+  line-height: 12px;
+  font-size: 12px;
+}
+
+.declCfgListPrintSpanTools button:disabled {
+  color: rgba(0, 0, 0, 0.25);
+  cursor: not-allowed;
+}
+
+.declCfgListPrintSpanTools button:first-child {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.declCfgListPrintSpanTools button:last-child {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.declCfgListPrintSpanTools > span {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  min-width: 22px;
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.65);
+  line-height: 28px;
+  text-align: center;
+}
+
+.declCfgListPrintEmpty {
+  color: rgba(0, 0, 0, 0.45);
+  font-weight: 400;
+}
+
+.declCfgListColumnStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.declCfgListColumnStripLabel {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+
+.declCfgListColumnChip {
+  height: 24px;
+  max-width: 140px;
+  padding: 0 8px;
+  border: 1px solid #d9e2ec;
+  background: #fff;
+  color: rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.declCfgListColumnChipActive {
+  border-color: var(--ant-color-primary, #1677ff);
+  background: #f3f8ff;
+  color: var(--ant-color-primary, #1677ff);
+}
+
+.declCfgListInspector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #e7edf3;
+  background: #fbfcfe;
+}
+
+.declCfgVisualInspectorPane .declCfgListInspector {
+  width: 100%;
+}
+
+.declCfgListInspectorGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.declCfgListColumnSwitch {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.declCfgListColumnSwitchSelect {
+  flex: 1;
+  min-width: 0;
+}
+
+.declCfgListColumnSwitch .ant-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+.declCfgListInspectorGroup label {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  min-width: 0;
+  gap: 6px;
+  align-items: center;
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 12px;
+}
+
+.declCfgListInspectorGroup label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.declCfgListInspectorGroup .declCfgListColumnNameField {
+  grid-column: 1 / -1;
+  grid-template-columns: 48px minmax(0, 1fr) 24px;
+}
+
+.declCfgListColumnNameField .ant-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+.declCfgListInspectorGroup > .ant-typography,
+.declCfgListInspectorGroup > .ant-btn,
+.declCfgMapTextEditor {
+  grid-column: 1 / -1;
+}
+
+.declCfgListInspectorGroup .ant-input-number,
+.declCfgListInspectorGroup .ant-select {
+  width: 100%;
+}
+
+.declCfgListInspectorSwitches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 12px;
+}
+
+.declCfgListInspectorEmpty {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+
+.declCfgListHiddenFields {
+  display: none;
+}
+
+.declCfgMapDesigner {
+  margin-top: 8px;
+}
+
+.declCfgMapDesignerInner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 14px;
+  align-items: start;
+}
+
+.declCfgMapCanvas {
+  min-width: 0;
+}
+
+.declCfgMapPrintPreview {
+  display: grid;
+  min-width: 720px;
+  overflow: hidden;
+  border-top: 1px solid #222;
+  border-left: 1px solid #222;
+  background: #fff;
+}
+
+.declCfgMapPrintTitleCell,
+.declCfgMapPrintLeftTitleCell,
+.declCfgMapPrintBodyCell,
+.declCfgMapStatementCell {
+  min-width: 0;
+  min-height: 40px;
+  border-right: 1px solid #222;
+  border-bottom: 1px solid #222;
+}
+
+.declCfgMapPrintTitleCell,
+.declCfgMapPrintLeftTitleCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  font-weight: 600;
+  text-align: center;
+  white-space: pre-line;
+}
+
+.declCfgMapPrintBodyCell {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px;
+  white-space: pre-wrap;
+  line-height: 1.8;
+}
+
+.declCfgMapStatementCell {
+  position: relative;
+  display: flex;
+  min-height: 150px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px;
+  cursor: pointer;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.declCfgMapStatementCellActive {
+  background: #f3f8ff;
+  box-shadow: inset 0 0 0 2px var(--ant-color-primary, #1677ff);
+}
+
+.declCfgMapStatementCell p {
+  margin: 0;
+  flex: 1;
+}
+
+.declCfgMapStatementDate {
+  text-align: center;
+}
+
+.declCfgMapWideField {
+  grid-column: 1 / -1;
+}
+
+.declCfgMapTextEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (max-width: 1180px) {
+  .declCfgVisualWorkbench {
+    grid-template-columns: 1fr;
+  }
+
+  .declCfgVisualPreviewPane {
+    position: static;
+    max-height: none;
+  }
+
+  .declCfgVisualPreviewScroller {
+    max-height: 60vh;
+  }
+
+  .declCfgListDesignerInner,
+  .declCfgMapDesignerInner {
+    grid-template-columns: 1fr;
+  }
 }
 
 .declCfgVisualAttachWrap {
@@ -201,6 +890,11 @@
 
 .declCfgVisualSectionCard {
   margin-bottom: 6px;
+}
+
+.declCfgVisualSectionCardActive.ant-card {
+  border-color: var(--ant-color-primary, #1677ff);
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.12);
 }
 
 .declCfgVisualSectionTitleInput {

@@ -59,5 +59,5 @@ export function moveTabToIndex(
 export const TAB_DRAG_MIME = "application/x-infoflow-tab-path";
 
 export function emptyTabBuckets(): Record<TopMenuKey, TabItem[]> {
-  return { declaration: [], survey: [], system: [] };
+  return { declaration: [], survey: [], system: [], help: [] };
 }

@@ -16,7 +16,7 @@ import {
   Upload,
   message,
 } from "antd";
-import { UploadOutlined } from "@ant-design/icons";
+import { MinusOutlined, PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { normalizeDeclarationConfig } from "./normalize";
 import type { DeclarationDraftShape } from "./declarationDraftShape";
 import {
@@ -26,7 +26,6 @@ import {
   getListRows,
   getMapAttachmentFiles,
   getMapFields,
-  getFormRefValues,
   getFormValues,
   normalizeDeclarationDraft,
   setListRows as setDraftListRows,
@@ -67,11 +66,26 @@ export type DeclarationConfigRendererProps = {
    * 在 tabs 布局下插在最前的标签（如申报页「基本信息」）；stack 布局下显示在模块卡片之前。
    */
   leadingTab?: { key: string; label: ReactNode; children: ReactNode };
+  displayMode?: "standard" | "print";
 };
 
 type RawModule = Record<string, unknown>;
 type RawSubModule = Record<string, unknown>;
+
+const TEXT_BLOCK_FIELD_KEY = "__text_block";
 type RawSection = Record<string, unknown>;
+
+type ProfilePreviewCell = {
+  fieldKey: string;
+  label: string;
+  labelSpan: number;
+  valueSpan: number;
+};
+
+type ProfilePreviewLayout = {
+  columns: number;
+  rows: { cells: ProfilePreviewCell[] }[];
+};
 
 function sortByOrder<T extends { order?: unknown }>(arr: T[]): T[] {
   return [...arr].sort((a, b) => {
@@ -167,6 +181,96 @@ function safeFormSchema(raw: unknown): { schema: FormNode | null; fields: Record
       ? (o.fields as Record<string, FieldDef>)
       : {};
   return { schema, fields };
+}
+
+function parseProfilePreviewLayout(raw: unknown): ProfilePreviewLayout | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const binding = raw as Record<string, unknown>;
+  if (binding.enabled === false) return null;
+  const table = binding.table_layout ?? binding.tableLayout;
+  if (!table || typeof table !== "object" || Array.isArray(table)) return null;
+  const tableObj = table as Record<string, unknown>;
+  const rowsRaw = Array.isArray(tableObj.rows) ? tableObj.rows : [];
+  const rows = rowsRaw.flatMap((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return [];
+    const cellsRaw = (row as Record<string, unknown>).cells;
+    if (!Array.isArray(cellsRaw)) return [];
+    const cells = cellsRaw.flatMap((cell) => {
+      if (!cell || typeof cell !== "object" || Array.isArray(cell)) return [];
+      const o = cell as Record<string, unknown>;
+      const fieldKey = typeof o.field_key === "string" ? o.field_key : "";
+      if (!fieldKey) return [];
+      const rawColSpan = o.col_span ?? o.colSpan;
+      const rawLabelSpan = o.label_span ?? o.labelSpan;
+      const rawValueSpan = o.value_span ?? o.valueSpan;
+      const colSpan = typeof rawColSpan === "number" && rawColSpan > 0 ? rawColSpan : 2;
+      const labelSpan = typeof rawLabelSpan === "number" && rawLabelSpan > 0 ? rawLabelSpan : 1;
+      const valueSpan =
+        typeof rawValueSpan === "number" && rawValueSpan > 0
+          ? rawValueSpan
+          : Math.max(1, colSpan - labelSpan);
+      return [
+        {
+          fieldKey,
+          label: typeof o.label === "string" ? o.label : "",
+          labelSpan,
+          valueSpan,
+        },
+      ];
+    });
+    return cells.length > 0 ? [{ cells }] : [];
+  });
+  if (rows.length === 0) return null;
+  const columns = tableObj.columns;
+  return {
+    columns: typeof columns === "number" && columns > 0 ? columns : 12,
+    rows,
+  };
+}
+
+function profilePreviewLabels(raw: unknown): Map<string, string> {
+  const result = new Map<string, string>();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return result;
+  const fields = (raw as Record<string, unknown>).fields;
+  if (!Array.isArray(fields)) return result;
+  fields.forEach((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return;
+    const o = item as Record<string, unknown>;
+    const fieldKey = typeof o.field_key === "string" ? o.field_key : "";
+    if (!fieldKey) return;
+    const label = typeof o.visible_label === "string" ? o.visible_label.trim() : "";
+    if (label) result.set(fieldKey, label);
+  });
+  return result;
+}
+
+function ProfileBindingPrintPreview({ binding }: { binding: unknown }) {
+  const layout = parseProfilePreviewLayout(binding);
+  if (!layout) return null;
+  const labels = profilePreviewLabels(binding);
+  return (
+    <div
+      className="declCfgRenderProfilePrint"
+      style={{ gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))` }}
+    >
+      {layout.rows.flatMap((row, rowIndex) =>
+        row.cells.flatMap((cell, cellIndex) => [
+          <div
+            key={`${rowIndex}_${cellIndex}_label`}
+            className="declCfgRenderProfilePrintLabel"
+            style={{ gridColumn: `span ${Math.max(1, cell.labelSpan)}` }}
+          >
+            {cell.label.trim() || labels.get(cell.fieldKey) || cell.fieldKey}
+          </div>,
+          <div
+            key={`${rowIndex}_${cellIndex}_value`}
+            className="declCfgRenderProfilePrintValue"
+            style={{ gridColumn: `span ${Math.max(1, cell.valueSpan)}` }}
+          />,
+        ]),
+      )}
+    </div>
+  );
 }
 
 function FormFieldControl({
@@ -700,9 +804,35 @@ function ListCellFill({
   );
 }
 
+function formatListCellValue(cellType: string, value: unknown): string {
+  if (value == null || value === "") return "";
+  if (cellType === "boolean") {
+    if (value === true || value === "yes") return "是";
+    if (value === false || value === "no") return "否";
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (item && typeof item === "object") {
+          const o = item as Record<string, unknown>;
+          return String(o.file_name ?? o.name ?? o.url ?? "");
+        }
+        return String(item);
+      })
+      .filter(Boolean)
+      .join("、");
+  }
+  if (typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    return String(o.file_name ?? o.name ?? o.url ?? "");
+  }
+  return String(value);
+}
+
 function SubModuleMapContent({
   subMap,
   interactive,
+  printLayout,
   rowKeyPrefix,
   moduleKey,
   subKey,
@@ -713,6 +843,7 @@ function SubModuleMapContent({
 }: {
   subMap: RawSubModule;
   interactive: boolean;
+  printLayout: boolean;
   rowKeyPrefix: string;
   moduleKey: string;
   subKey: string;
@@ -725,11 +856,42 @@ function SubModuleMapContent({
     typeof subMap.sentenceTemplate === "string"
       ? subMap.sentenceTemplate.trim()
       : "";
+  const printColumns =
+    typeof subMap.printColumns === "number" && subMap.printColumns > 0 ? subMap.printColumns : 12;
+  const printRows =
+    typeof subMap.printRows === "number" && subMap.printRows > 0 ? subMap.printRows : 4;
+  const printTitleMode =
+    subMap.printTitleMode === "left_merged" || subMap.printTitleMode === "hidden"
+      ? subMap.printTitleMode
+      : "top";
+  const printTitleSpan =
+    typeof subMap.printTitleSpan === "number" && subMap.printTitleSpan > 0
+      ? Math.max(1, Math.min(Math.max(1, printColumns - 1), subMap.printTitleSpan))
+      : 2;
+  const contentSpan =
+    printTitleMode === "left_merged" ? Math.max(1, printColumns - printTitleSpan) : printColumns;
+  const mapGridColumns =
+    printTitleMode === "left_merged"
+      ? `var(--decl-print-left-title-width, 160px) repeat(${contentSpan}, minmax(32px, 1fr))`
+      : `repeat(${printColumns}, minmax(32px, 1fr))`;
+  const mapPrintMode =
+    subMap.mapPrintMode === "field_table" || subMap.mapPrintMode === "statement_grid"
+      ? subMap.mapPrintMode
+      : "text_block";
+  const sectionTitle = typeof subMap.title === "string" && subMap.title.trim() ? subMap.title.trim() : "表单汇总";
+  const rawStatementLayout =
+    subMap.statementLayout && typeof subMap.statementLayout === "object"
+      ? (subMap.statementLayout as Record<string, unknown>)
+      : {};
+  const statementColumns = Array.isArray(rawStatementLayout.columns)
+    ? rawStatementLayout.columns
+    : [];
   const fields = Array.isArray(subMap.fields) ? subMap.fields : [];
   const attachments = Array.isArray(subMap.attachments)
     ? subMap.attachments
     : [];
-  const mapValues = interactive ? getMapFields(draft, moduleKey, subKey, sectionKey) : {};
+  const printLike = printLayout;
+  const mapValues = getMapFields(draft, moduleKey, subKey, sectionKey);
 
   const patchMapField = useCallback(
     (fieldName: string, v: unknown) => {
@@ -737,6 +899,90 @@ function SubModuleMapContent({
     },
     [draft, moduleKey, subKey, sectionKey, onDraftChange],
   );
+
+  if (printLike && mapPrintMode === "text_block") {
+    const textValue = mapValues[TEXT_BLOCK_FIELD_KEY];
+    return (
+      <div className="declCfgRenderPrintMapWrap">
+        <div
+          className="declCfgRenderPrintMap"
+          style={{ gridTemplateColumns: mapGridColumns }}
+        >
+          {printTitleMode === "top" ? (
+            <div
+              className="declCfgRenderPrintMapTitle"
+              style={{ gridColumn: `span ${printColumns}` }}
+            >
+              {sectionTitle}
+            </div>
+          ) : null}
+          {printTitleMode === "left_merged" ? (
+            <div
+              className="declCfgRenderPrintMapLeftTitle"
+              style={{
+                gridColumn: "span 1",
+                gridRow: `span ${printRows}`,
+              }}
+            >
+              {sectionTitle}
+            </div>
+          ) : null}
+          <div
+            className="declCfgRenderPrintMapBody"
+            style={{
+              gridColumn: `span ${contentSpan}`,
+              gridRow: `span ${printRows}`,
+            }}
+          >
+            {interactive ? (
+              <Input.TextArea
+                className="declCfgRenderPrintMapTextArea"
+                value={typeof textValue === "string" ? textValue : ""}
+                placeholder={sentenceTemplate || "请输入"}
+                autoSize={false}
+                onChange={(e) => patchMapField(TEXT_BLOCK_FIELD_KEY, e.target.value)}
+              />
+            ) : typeof textValue === "string" && textValue.trim() ? (
+              textValue
+            ) : (
+              sentenceTemplate
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (printLike && mapPrintMode === "statement_grid") {
+    return (
+      <div className="declCfgRenderPrintMapWrap">
+        <div
+          className="declCfgRenderPrintMap"
+          style={{ gridTemplateColumns: `repeat(${printColumns}, minmax(32px, 1fr))` }}
+        >
+          {statementColumns.map((item, index) => {
+            const column = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+            const rawSpan = column.col_span ?? column.colSpan;
+            const span = typeof rawSpan === "number" && rawSpan > 0 ? rawSpan : 4;
+            return (
+              <div
+                key={`${String(column.title ?? index)}_${index}`}
+                className="declCfgRenderPrintStatementCell"
+                style={{ gridColumn: `span ${Math.max(1, span)}` }}
+              >
+                <strong>{typeof column.title === "string" ? column.title : ""}</strong>
+                <p>{typeof column.content === "string" ? column.content : ""}</p>
+                <div>{typeof column.footer_label === "string" ? column.footer_label : ""}</div>
+                <div className="declCfgRenderPrintStatementDate">
+                  {typeof column.date_label === "string" ? column.date_label : ""}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -913,6 +1159,8 @@ function SubModuleMapContent({
 function SubModuleListContent({
   subList,
   interactive,
+  printLayout,
+  materialPreview,
   moduleKey,
   subKey,
   sectionKey,
@@ -921,6 +1169,8 @@ function SubModuleListContent({
 }: {
   subList: RawSubModule;
   interactive: boolean;
+  printLayout: boolean;
+  materialPreview: boolean;
   moduleKey: string;
   subKey: string;
   sectionKey: string;
@@ -930,6 +1180,37 @@ function SubModuleListContent({
   const columnsRaw = Array.isArray(subList.columns) ? subList.columns : [];
   const maxRows =
     typeof subList.maxRows === "number" && subList.maxRows > 0 ? subList.maxRows : 10;
+  const printColumns =
+    typeof subList.printColumns === "number" && subList.printColumns > 0 ? subList.printColumns : 12;
+  const sectionTitle = typeof subList.title === "string" && subList.title.trim() ? subList.title.trim() : "列表";
+  const printTitleMode =
+    subList.printTitleMode === "left_merged" || subList.printTitleMode === "hidden"
+      ? subList.printTitleMode
+      : "top";
+  const printTitleSpan =
+    typeof subList.printTitleSpan === "number" && subList.printTitleSpan > 0
+      ? Math.max(1, Math.min(Math.max(1, printColumns - 1), subList.printTitleSpan))
+      : 2;
+  const contentPrintColumns =
+    printTitleMode === "left_merged" ? Math.max(1, printColumns - printTitleSpan) : printColumns;
+  const listGridColumns =
+    printTitleMode === "left_merged"
+      ? `var(--decl-print-left-title-width, 160px) repeat(${contentPrintColumns}, minmax(32px, 1fr))`
+      : `repeat(${printColumns}, minmax(32px, 1fr))`;
+  const printColumnItems = columnsRaw.map((c, idx) => {
+    const o = c && typeof c === "object" ? (c as Record<string, unknown>) : {};
+    const name = typeof o.name === "string" ? o.name : `col_${idx}`;
+    const title = typeof o.title === "string" && o.title.trim() ? o.title.trim() : name;
+    const rawSpan = o.colSpan ?? o.col_span ?? o.printColSpan ?? o.print_col_span;
+    const span = Math.max(
+      1,
+      Math.min(contentPrintColumns, typeof rawSpan === "number" && rawSpan > 0 ? rawSpan : 2),
+    );
+    return { key: name, title, span };
+  });
+  const printUsedColumns = printColumnItems.reduce((sum, column) => sum + column.span, 0);
+  const printFillSpan =
+    (contentPrintColumns - (printUsedColumns % contentPrintColumns)) % contentPrintColumns;
   const tb =
     subList.toolbar && typeof subList.toolbar === "object"
       ? (subList.toolbar as Record<string, unknown>)
@@ -942,6 +1223,9 @@ function SubModuleListContent({
 
   const showAdd = tb.add !== false;
   const showRemove = tb.remove !== false;
+  const pasteEnabled = subList.pasteEnabled !== false;
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
 
   const tableColsReadonly = columnsRaw.map((c, idx) => {
     const o = c && typeof c === "object" ? (c as Record<string, unknown>) : {};
@@ -965,7 +1249,7 @@ function SubModuleListContent({
     };
   });
 
-  const storedRows = interactive ? getListRows(draft, moduleKey, subKey, sectionKey) : null;
+  const storedRows = getListRows(draft, moduleKey, subKey, sectionKey);
   const listRows =
     interactive && storedRows && storedRows.length > 0 ? storedRows : interactive ? [{}] : [];
 
@@ -997,8 +1281,66 @@ function SubModuleListContent({
     [draft, moduleKey, subKey, sectionKey, onDraftChange],
   );
 
+  const copyListRow = useCallback(
+    (idx: number) => {
+      const base = getListRows(draft, moduleKey, subKey, sectionKey) ?? [{}];
+      if (base.length >= maxRows) return;
+      const source = base[idx] && typeof base[idx] === "object" ? base[idx] : {};
+      const next = [...base];
+      next.splice(idx + 1, 0, { ...source });
+      onDraftChange(setDraftListRows(draft, moduleKey, subKey, sectionKey, next));
+    },
+    [draft, moduleKey, subKey, sectionKey, maxRows, onDraftChange],
+  );
+
+  const applyPasteRows = useCallback(() => {
+    const usableColumns = columnsRaw
+      .map((c, idx) => {
+        const o = c && typeof c === "object" ? (c as Record<string, unknown>) : {};
+        return typeof o.name === "string" ? o.name : `col_${idx}`;
+      })
+      .filter(Boolean);
+    if (usableColumns.length === 0) {
+      message.warning("当前表格没有可粘贴的列");
+      return;
+    }
+    const rows = pasteText
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.trim() !== "")
+      .map((line) => line.split("\t"));
+    if (rows.length === 0) {
+      message.warning("请先粘贴表格内容");
+      return;
+    }
+    const parsed = rows.map((cells) => {
+      const row: Record<string, unknown> = {};
+      usableColumns.forEach((name, index) => {
+        row[name] = cells[index] ?? "";
+      });
+      return row;
+    });
+    const base = getListRows(draft, moduleKey, subKey, sectionKey);
+    const current = base && base.length > 0 ? base : [];
+    const next = [...current, ...parsed].slice(0, maxRows);
+    onDraftChange(setDraftListRows(draft, moduleKey, subKey, sectionKey, next.length ? next : [{}]));
+    if (current.length + parsed.length > maxRows) {
+      message.warning(`已按最大行数 ${maxRows} 截断`);
+    }
+    setPasteText("");
+    setPasteOpen(false);
+  }, [columnsRaw, draft, moduleKey, subKey, sectionKey, maxRows, onDraftChange, pasteText]);
+
   const dataSourceReadonly: Record<string, unknown>[] = [];
   const dataSourceFill = listRows.map((row, i) => ({ ...row, key: i, __rowIndex: i }));
+  const previewRows = !interactive && storedRows ? storedRows : [];
+  const renderedPrintRows = interactive
+    ? Math.max(1, listRows.length)
+    : storedRows
+      ? Math.max(1, storedRows.length)
+      : materialPreview
+        ? 1
+        : maxRows;
 
   const tableColsFill = columnsRaw.map((c, idx) => {
     const o = c && typeof c === "object" ? (c as Record<string, unknown>) : {};
@@ -1032,6 +1374,144 @@ function SubModuleListContent({
     };
   });
 
+  if (printLayout) {
+    return (
+      <div className="declCfgRenderPrintListWrap">
+        <div
+          className="declCfgRenderPrintList"
+          style={{ gridTemplateColumns: listGridColumns }}
+        >
+          {printTitleMode === "top" ? (
+            <div
+              className="declCfgRenderPrintListTitle"
+              style={{ gridColumn: `span ${printColumns}` }}
+            >
+              {sectionTitle}
+            </div>
+          ) : null}
+          {printTitleMode === "left_merged" ? (
+            <div
+              className="declCfgRenderPrintListLeftTitle"
+              style={{
+                gridColumn: "span 1",
+                gridRow: `span ${renderedPrintRows + 1}`,
+              }}
+            >
+              {sectionTitle}
+            </div>
+          ) : null}
+          {printColumnItems.length > 0 ? (
+            <>
+              {printColumnItems.map((column) => (
+                <div
+                  key={column.key}
+                  className="declCfgRenderPrintListHead"
+                  style={{ gridColumn: `span ${column.span}` }}
+                >
+                  {column.title}
+                </div>
+              ))}
+              {printFillSpan > 0 ? (
+                <div
+                  className="declCfgRenderPrintListFiller declCfgRenderPrintListHeadFiller"
+                  style={{ gridColumn: `span ${printFillSpan}` }}
+                />
+              ) : null}
+            </>
+          ) : (
+            <div
+              className="declCfgRenderPrintListEmpty"
+              style={{ gridColumn: `span ${printColumns}` }}
+            >
+              （无列定义）
+            </div>
+          )}
+          {printColumnItems.length > 0
+            ? Array.from({ length: renderedPrintRows }).flatMap((_, rowIndex) => {
+                const sourceRows = interactive ? listRows : previewRows;
+                const record =
+                  sourceRows[rowIndex] && typeof sourceRows[rowIndex] === "object"
+                    ? sourceRows[rowIndex]
+                    : {};
+                const rowCells = printColumnItems.map((column) => {
+                  const rawColumn = columnsRaw.find((item, idx) => {
+                    const o = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+                    const name = typeof o.name === "string" ? o.name : `col_${idx}`;
+                    return name === column.key;
+                  });
+                  const rawColumnObj =
+                    rawColumn && typeof rawColumn === "object"
+                      ? (rawColumn as Record<string, unknown>)
+                      : {};
+                  const cellType =
+                    typeof rawColumnObj.cellType === "string" ? rawColumnObj.cellType : "text";
+                  return (
+                    <div
+                      key={`${rowIndex}-${column.key}`}
+                      className="declCfgRenderPrintListBody"
+                      style={{ gridColumn: `span ${column.span}` }}
+                    >
+                      {interactive ? (
+                        <ListCellFill
+                          cellType={cellType}
+                          value={(record as Record<string, unknown>)[column.key]}
+                          onChange={(nextValue) => updateCell(rowIndex, column.key, nextValue)}
+                        />
+                      ) : (
+                        formatListCellValue(
+                          cellType,
+                          (record as Record<string, unknown>)[column.key],
+                        )
+                      )}
+                    </div>
+                  );
+                });
+                return printFillSpan > 0
+                  ? [
+                      ...rowCells,
+                      <div
+                        key={`${rowIndex}-row-filler`}
+                        className="declCfgRenderPrintListFiller"
+                        style={{ gridColumn: `span ${printFillSpan}` }}
+                      />,
+                    ]
+                  : rowCells;
+              })
+            : null}
+        </div>
+        {interactive && (showAdd || showRemove) ? (
+          <div className="declCfgRenderPrintListSideActions">
+            {showAdd ? (
+              <Button
+                size="small"
+                type="text"
+                shape="circle"
+                icon={<PlusOutlined />}
+                title="添加一行"
+                aria-label="添加一行"
+                onClick={addListRow}
+                disabled={listRows.length >= maxRows}
+              />
+            ) : null}
+            {showRemove ? (
+              <Button
+                size="small"
+                type="text"
+                danger
+                shape="circle"
+                icon={<MinusOutlined />}
+                title="删除末行"
+                aria-label="删除末行"
+                onClick={() => removeListRow(listRows.length - 1)}
+                disabled={listRows.length <= 1}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <>
       <Descriptions size="small" column={1} style={{ marginBottom: 8 }}>
@@ -1043,6 +1523,11 @@ function SubModuleListContent({
           {showAdd ? (
             <Button size="small" type="dashed" onClick={addListRow} disabled={listRows.length >= maxRows}>
               添加一行
+            </Button>
+          ) : null}
+          {pasteEnabled ? (
+            <Button size="small" onClick={() => setPasteOpen(true)} disabled={listRows.length >= maxRows}>
+              粘贴多行
             </Button>
           ) : null}
         </Space>
@@ -1066,18 +1551,28 @@ function SubModuleListContent({
                         {
                           title: "操作",
                           key: "_op",
-                          width: 72,
+                          width: 126,
                           fixed: "right" as const,
                           render: (_: unknown, record: Record<string, unknown>) => (
-                            <Button
-                              type="link"
-                              danger
-                              size="small"
-                              disabled={listRows.length <= 1}
-                              onClick={() => removeListRow(Number(record.__rowIndex))}
-                            >
-                              删除
-                            </Button>
+                            <Space size={2}>
+                              <Button
+                                type="link"
+                                size="small"
+                                disabled={listRows.length >= maxRows}
+                                onClick={() => copyListRow(Number(record.__rowIndex))}
+                              >
+                                复制
+                              </Button>
+                              <Button
+                                type="link"
+                                danger
+                                size="small"
+                                disabled={listRows.length <= 1}
+                                onClick={() => removeListRow(Number(record.__rowIndex))}
+                              >
+                                删除
+                              </Button>
+                            </Space>
                           ),
                         },
                       ]
@@ -1089,6 +1584,33 @@ function SubModuleListContent({
               : [{ title: "（无列定义）", key: "empty", render: () => null }]
         }
       />
+      {interactive && pasteOpen ? (
+        <div className="declCfgRenderPastePanel">
+          <Typography.Text type="secondary">
+            从 Excel 复制多行后粘贴到下方，系统会按当前列顺序写入。
+          </Typography.Text>
+          <Input.TextArea
+            value={pasteText}
+            onChange={(event) => setPasteText(event.target.value)}
+            rows={5}
+            placeholder="每行一条记录，列之间用 Tab 分隔"
+          />
+          <Space>
+            <Button type="primary" size="small" onClick={applyPasteRows}>
+              应用粘贴
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                setPasteOpen(false);
+                setPasteText("");
+              }}
+            >
+              取消
+            </Button>
+          </Space>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -1131,8 +1653,6 @@ function FormRefSection({
       .catch(() => setError("问卷加载失败"))
       .finally(() => setLoading(false));
   }, [templateId, templateVersion]);
-
-  const values = getFormRefValues(draft, moduleKey, subKey, sectionKey);
 
   const handleChange = useCallback(
     (nextValues: Record<string, unknown>) => {
@@ -1186,6 +1706,8 @@ function SubModuleBlock({
   sub,
   si,
   interactive,
+  printLayout,
+  materialPreview,
   rowKeyPrefix,
   moduleKey,
   materialId,
@@ -1195,6 +1717,8 @@ function SubModuleBlock({
   sub: RawSubModule;
   si: number;
   interactive: boolean;
+  printLayout: boolean;
+  materialPreview: boolean;
   rowKeyPrefix: string;
   moduleKey: string;
   materialId?: number;
@@ -1205,23 +1729,8 @@ function SubModuleBlock({
   const { title, helpText } = pickSubTitleAndHelp(sub);
   const sections = normalizeSubSections(sub);
 
-  return (
-    <Card
-      size="small"
-      className="declCfgRenderSubCard"
-      title={
-        <div className="declCfgRenderSubHeaderTitle">
-          <span className="declCfgRenderSubHeaderTitleMain">
-            {title || "子模块"}
-          </span>
-          {helpText ? (
-            <span className="declCfgRenderSubHeaderHelp" title={helpText}>
-              {helpText}
-            </span>
-          ) : null}
-        </div>
-      }
-    >
+  const content = (
+    <>
       {sections.map((sec, idx) => {
         const sectionKey =
           typeof sec.key === "string" && sec.key.trim()
@@ -1238,7 +1747,7 @@ function SubModuleBlock({
         const secTitle = typeof sec.title === "string" ? sec.title.trim() : "";
         return (
           <div key={sectionKey}>
-            {secTitle ? (
+            {interactive && !printLayout && secTitle && kind !== "list" ? (
               <Typography.Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 6 }}>
                 {secTitle}
               </Typography.Text>
@@ -1247,6 +1756,7 @@ function SubModuleBlock({
               <SubModuleMapContent
                 subMap={sec}
                 interactive={interactive}
+                printLayout={printLayout}
                 rowKeyPrefix={`${rowKeyPrefix}-${sectionKey}`}
                 moduleKey={moduleKey}
                 subKey={subKey}
@@ -1259,6 +1769,8 @@ function SubModuleBlock({
               <SubModuleListContent
                 subList={sec}
                 interactive={interactive}
+                printLayout={printLayout}
+                materialPreview={materialPreview}
                 moduleKey={moduleKey}
                 subKey={subKey}
                 sectionKey={sectionKey}
@@ -1287,10 +1799,33 @@ function SubModuleBlock({
                 onDraftChange={onDraftChange}
               />
             )}
-            {idx < sections.length - 1 ? <div style={{ height: 12 }} /> : null}
+            {interactive && !printLayout && idx < sections.length - 1 ? <div style={{ height: 12 }} /> : null}
           </div>
         );
       })}
+    </>
+  );
+
+  if (printLayout) return <>{content}</>;
+
+  return (
+    <Card
+      size="small"
+      className="declCfgRenderSubCard"
+      title={
+        <div className="declCfgRenderSubHeaderTitle">
+          <span className="declCfgRenderSubHeaderTitleMain">
+            {title || "子模块"}
+          </span>
+          {interactive && helpText ? (
+            <span className="declCfgRenderSubHeaderHelp" title={helpText}>
+              {helpText}
+            </span>
+          ) : null}
+        </div>
+      }
+    >
+      {content}
     </Card>
   );
 }
@@ -1299,6 +1834,8 @@ function ModuleSectionContent({
   mod,
   mi,
   interactive,
+  printLayout,
+  materialPreview,
   materialId,
   draft,
   onDraftChange,
@@ -1306,6 +1843,8 @@ function ModuleSectionContent({
   mod: RawModule;
   mi: number;
   interactive: boolean;
+  printLayout: boolean;
+  materialPreview: boolean;
   materialId?: number;
   draft: DeclarationDraftShape;
   onDraftChange: (next: DeclarationDraftShape) => void;
@@ -1326,6 +1865,8 @@ function ModuleSectionContent({
           sub={sub}
           si={si}
           interactive={interactive}
+          printLayout={printLayout}
+          materialPreview={materialPreview}
           rowKeyPrefix={`${key}-${si}`}
           moduleKey={key}
           materialId={materialId}
@@ -1349,14 +1890,18 @@ export function DeclarationConfigRenderer({
   onDraftChange,
   leadingTab,
   materialId,
+  displayMode = "standard",
 }: DeclarationConfigRendererProps) {
   const interactive = variant === "fill";
+  const printFlow = !interactive || displayMode === "print";
   const [internalDraft, setInternalDraft] = useState<DeclarationDraftShape>(() =>
     emptyDeclarationDraft(),
   );
   const controlled = typeof onDraftChange === "function";
+  const hasDraftProp = draftProp !== undefined;
+  const materialPreview = !interactive && hasDraftProp;
   const draft = normalizeDeclarationDraft(
-    controlled ? (draftProp ?? emptyDeclarationDraft()) : internalDraft,
+    hasDraftProp ? draftProp : internalDraft,
   );
   const commitDraft = useCallback(
     (next: DeclarationDraftShape) => {
@@ -1370,6 +1915,14 @@ export function DeclarationConfigRenderer({
   const modules = sortByOrder(
     modulesRaw.filter((m) => m && typeof m === "object") as RawModule[],
   );
+  const profileBinding =
+    normalized.profileBinding && typeof normalized.profileBinding === "object"
+      ? (normalized.profileBinding as Record<string, unknown>)
+      : null;
+  const profilePreview =
+    !interactive && profileBinding && leadingTab == null ? (
+      <ProfileBindingPrintPreview binding={profileBinding} />
+    ) : null;
 
   const moduleTabKeys = useMemo(() => {
     const keys = modules.map((mod, mi) =>
@@ -1404,6 +1957,8 @@ export function DeclarationConfigRenderer({
                 mod={mod}
                 mi={mi}
                 interactive={interactive}
+                printLayout={printFlow}
+                materialPreview={materialPreview}
                 materialId={materialId}
                 draft={draft}
                 onDraftChange={commitDraft}
@@ -1463,6 +2018,7 @@ export function DeclarationConfigRenderer({
     return (
       <div className="declCfgRender">
         {hint ? <div className="declCfgRenderHint">{hint}</div> : null}
+        {profilePreview}
         <Typography.Text type="secondary">当前配置暂无模块，请在可视化或 JSON 中添加 modules。</Typography.Text>
       </div>
     );
@@ -1485,9 +2041,13 @@ export function DeclarationConfigRenderer({
   }
 
   return (
-    <div className="declCfgRender">
+    <div className={printFlow ? "declCfgRender declCfgRenderPrintFlow" : "declCfgRender"}>
       {hint ? <div className="declCfgRenderHint">{hint}</div> : null}
-      {leadingTab != null ? (
+      {profilePreview}
+      {leadingTab != null && printFlow ? (
+        <div className="declCfgRenderPrintLeading">{leadingTab.children}</div>
+      ) : null}
+      {leadingTab != null && !printFlow ? (
         <Card size="small" className="declCfgRenderModule" title={leadingTab.label}>
           {leadingTab.children}
         </Card>
@@ -1495,12 +2055,29 @@ export function DeclarationConfigRenderer({
       {modules.map((mod, mi) => {
         const key = typeof mod.key === "string" ? mod.key : `module_${mi}`;
         const title = typeof mod.title === "string" ? mod.title : key;
+        if (printFlow) {
+          return (
+            <ModuleSectionContent
+              key={key}
+              mod={mod}
+              mi={mi}
+              interactive={interactive}
+              printLayout={printFlow}
+              materialPreview={materialPreview}
+              materialId={materialId}
+              draft={draft}
+              onDraftChange={commitDraft}
+            />
+          );
+        }
         return (
           <Card key={key} size="small" className="declCfgRenderModule" title={title}>
             <ModuleSectionContent
               mod={mod}
               mi={mi}
               interactive={interactive}
+              printLayout={printFlow}
+              materialPreview={materialPreview}
               materialId={materialId}
               draft={draft}
               onDraftChange={commitDraft}

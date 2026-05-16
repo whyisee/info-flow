@@ -1,4 +1,4 @@
-import { Button, Card, Result, Spin, Typography } from "antd";
+import { Card, Result, Spin } from "antd";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPublicVersion, submitSurveyResponse, type PublicVersion } from "../../services/surveyResponses";

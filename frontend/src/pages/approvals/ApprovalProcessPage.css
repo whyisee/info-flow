@@ -143,8 +143,49 @@
 .approvalProcessDeclRenderer {
   padding: 8px 10px;
   border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
-  border-radius: 8px;
+  border-radius: 4px;
   background: #fff;
+  overflow-x: auto;
+}
+
+.approvalProcessDeclRenderer .declCfgRenderPrintFlow {
+  min-width: 960px;
+}
+
+.approvalProcessDeclRenderer .declCfgRenderPrintLeading {
+  margin-bottom: 0;
+}
+
+.approvalProcessProfilePrintTable {
+  display: grid;
+  width: 100%;
+  border-top: 2px solid #1f2937;
+  border-left: 2px solid #1f2937;
+  background: #fff;
+}
+
+.approvalProcessProfilePrintLabel,
+.approvalProcessProfilePrintValue {
+  min-height: 44px;
+  padding: 8px 10px;
+  border-right: 2px solid #1f2937;
+  border-bottom: 2px solid #1f2937;
+  display: flex;
+  align-items: center;
+  word-break: break-word;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.approvalProcessProfilePrintLabel {
+  justify-content: center;
+  text-align: center;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.approvalProcessProfilePrintValue {
+  color: #111827;
 }
 
 .approvalProcessContentPre {
@@ -173,4 +214,3 @@
   border-radius: 8px;
   background: #fff;
 }
-

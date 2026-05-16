@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, Form, Spin } from "antd";
-import { listMyModuleConfigs } from "../../services/moduleConfig";
+import {
+  listMyModuleConfigs,
+  listUserModuleConfigs,
+  type UserModuleConfigDTO,
+} from "../../services/moduleConfig";
+import {
+  getMyProfileVersion,
+  getUserProfileVersionForApprover,
+  type ProfileVersionOut,
+} from "../../services/profileVersions";
 import { listDictItems } from "../../services/dataDict";
 import {
   listEnabledProfileFieldCatalog,
@@ -14,6 +23,7 @@ import {
   normalizeLoadedProfile,
   stripFormStatusFromValues,
 } from "../declaration/profile/profileModuleFields";
+import { useAuth } from "../../store/AuthContext";
 import "../declaration/profile/ProfileBasicConfig.css";
 import "../../features/declaration-config-render/DeclarationConfigRenderer.css";
 import "./MaterialBasicInfoFromProfile.css";
@@ -29,6 +39,8 @@ interface Props {
   onFieldsLoaded?: (values: Record<string, unknown>) => void;
   profileBinding?: Record<string, unknown> | null;
   framed?: boolean;
+  userId?: number | null;
+  profileVersionId?: number | null;
 }
 
 type ProfileBindingField = {
@@ -50,6 +62,38 @@ type ProfileTableLayout = {
   columns: number;
   rows: { cells: ProfileTableCell[] }[];
 };
+
+function rowsFromProfileVersion(row: ProfileVersionOut): UserModuleConfigDTO[] {
+  const profile = row.profile && typeof row.profile === "object" ? row.profile : {};
+  const modules = profile.modules && typeof profile.modules === "object" ? profile.modules : null;
+  if (modules) {
+    return PROFILE_LOAD_MODULES.map((module) => ({
+      id: 0,
+      user_id: row.user_id,
+      module,
+      config:
+        (modules as Record<string, unknown>)[module] &&
+        typeof (modules as Record<string, unknown>)[module] === "object"
+          ? ((modules as Record<string, unknown>)[module] as Record<string, unknown>)
+          : {},
+      status: "active",
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }));
+  }
+  const merged = profile.merged && typeof profile.merged === "object" ? profile.merged : profile;
+  return [
+    {
+      id: 0,
+      user_id: row.user_id,
+      module: PROFILE_MODULE.BASIC,
+      config: merged as Record<string, unknown>,
+      status: "active",
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    },
+  ];
+}
 
 function parseProfileBindingFields(raw: unknown): ProfileBindingField[] {
   if (!raw || typeof raw !== "object") return [];
@@ -221,7 +265,10 @@ export default function MaterialBasicInfoFromProfile({
   onFieldsLoaded,
   profileBinding,
   framed = true,
+  userId,
+  profileVersionId,
 }: Props) {
+  const { user } = useAuth();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(true);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -233,7 +280,19 @@ export default function MaterialBasicInfoFromProfile({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await listMyModuleConfigs();
+      const targetUserId = typeof userId === "number" && userId > 0 ? userId : undefined;
+      let rows: UserModuleConfigDTO[];
+      if (targetUserId && profileVersionId && profileVersionId > 0) {
+        const row =
+          user && user.id === targetUserId
+            ? await getMyProfileVersion(profileVersionId)
+            : await getUserProfileVersionForApprover(targetUserId, profileVersionId);
+        rows = rowsFromProfileVersion(row);
+      } else if (targetUserId && (!user || user.id !== targetUserId)) {
+        rows = await listUserModuleConfigs(targetUserId);
+      } else {
+        rows = await listMyModuleConfigs();
+      }
       const basic = rows.find((r) => r.module === PROFILE_MODULE.BASIC);
       const basicCfg = basic?.config;
       if (!basicCfg || typeof basicCfg !== "object") {
@@ -278,7 +337,7 @@ export default function MaterialBasicInfoFromProfile({
     } finally {
       setLoading(false);
     }
-  }, [catalog, form, onFieldsLoaded]);
+  }, [catalog, form, onFieldsLoaded, profileVersionId, user, userId]);
 
   useEffect(() => {
     let cancelled = false;

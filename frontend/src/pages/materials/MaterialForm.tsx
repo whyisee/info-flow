@@ -668,6 +668,8 @@ export default function MaterialForm() {
                                 onFieldsLoaded={setProfileData}
                                 profileBinding={profileBinding}
                                 framed={false}
+                                userId={isEdit && material ? material.user_id : undefined}
+                                profileVersionId={isEdit && material ? material.profile_version_id ?? undefined : undefined}
                               />
                             ),
                           }
